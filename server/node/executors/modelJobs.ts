@@ -8,7 +8,6 @@ import path from "node:path";
 import http from "node:http";
 import https from "node:https";
 import crypto from "node:crypto";
-import { once } from "node:events";
 import type { Readable } from "node:stream";
 import {
   MODEL_JOB_TERMINAL_STATUSES,
@@ -400,11 +399,7 @@ export function createModelJobManager({
   }
 
   async function runJob(job: ActiveModelJob, arg: UpstreamRequestArg) {
-    const stream = fs.createWriteStream(journalPath(job.id), { flags: "a" });
-    let writeError: Error | null = null;
-    stream.on("error", (error: Error) => {
-      writeError ||= error;
-    });
+    const journalHandle = await fsp.open(journalPath(job.id), "a");
     let failure: Error | null = null;
     try {
       const upstream = await requestUpstream(arg);
@@ -414,18 +409,25 @@ export function createModelJobManager({
         const contentType = upstream.headers["content-type"];
         record.contentType =
           typeof contentType === "string" ? contentType : null;
-        await persist();
+        notify(job);
+        void persist();
       }
       for await (const chunk of upstream.body) {
         if (job.controller.signal.aborted) break;
         if (!chunk || chunk.length === 0) continue;
-        if (writeError) throw writeError;
-        const ok = stream.write(chunk);
-        job.bytesWritten += chunk.length;
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        let writtenOffset = 0;
+        while (writtenOffset < buf.length) {
+          const { bytesWritten } = await journalHandle.write(
+            buf,
+            writtenOffset,
+            buf.length - writtenOffset,
+          );
+          writtenOffset += bytesWritten;
+        }
+        job.bytesWritten += buf.length;
         notify(job);
-        if (!ok) await once(stream, "drain");
       }
-      if (writeError) throw writeError;
       if (job.controller.signal.aborted) {
         const error = new Error("Model job aborted");
         error.name = "AbortError";
@@ -434,8 +436,11 @@ export function createModelJobManager({
     } catch (error) {
       failure = error as Error;
     } finally {
-      await new Promise((resolve) => stream.end(resolve));
-      if (!failure && writeError) failure = writeError;
+      try {
+        await journalHandle.close();
+      } catch (closeError) {
+        if (!failure) failure = closeError as Error;
+      }
       const record = findRecord(job.id);
       if (record) {
         record.status = !failure
@@ -519,12 +524,13 @@ export function createModelJobManager({
     activeJobs.set(id, job);
     emitEvent("created", record, { sourceClientId: job.sourceClientId });
     void persist();
-    const runPromise = runJob(job, {
+  const runPromise = runJob(job, {
       targetUrl: request.targetUrl,
       method: request.method,
       headers: normalizeHeaders(request.headers),
       bodyBuffer: request.body ? Buffer.from(request.body, "utf8") : undefined,
       timeoutMs: normalizeTimeout(request.timeoutMs),
+      signal: job.controller.signal,
     }).catch((error: unknown) =>
       logger.error("[model-jobs] run failed", error),
     );
@@ -614,11 +620,23 @@ export function createModelJobManager({
       record.upstreamStatus == null &&
       activeJobs.has(jobId)
     ) {
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await waitForEvent(jobId);
       record = findRecord(jobId);
       if (!record) return;
     }
     if (clientGone) return;
+    if (record.upstreamStatus == null) {
+      res.status(502);
+      res.set("content-type", "text/plain; charset=utf-8");
+      res.set("cache-control", "no-cache, no-transform");
+      res.set("x-accel-buffering", "no");
+      res.set("x-model-job-id", record.id);
+      res.set("x-model-job-status", record.status);
+      res.set("x-model-job-upstream-status", "502");
+      res.flushHeaders();
+      res.end(record.error || `Model job ${record.status} before upstream response.`);
+      return;
+    }
     res.status(200);
     res.set("content-type", record.contentType || "application/octet-stream");
     res.set("cache-control", "no-cache, no-transform");

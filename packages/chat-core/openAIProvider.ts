@@ -415,6 +415,88 @@ function applyOpenAIPostParameterBodyPolicies(
   return { body, error: null };
 }
 
+function extractOpenAIReasoningDetailsText(details: unknown): string {
+  if (!Array.isArray(details)) return "";
+  let out = "";
+  for (const item of details) {
+    if (!item || typeof item !== "object") continue;
+    const part = item as Record<string, unknown>;
+    if (typeof part.text === "string" && part.text) {
+      out += part.text;
+    } else if (typeof part.summary === "string" && part.summary) {
+      out += part.summary;
+    } else if (typeof part.reasoning === "string" && part.reasoning) {
+      out += part.reasoning;
+    } else if (typeof part.thinking === "string" && part.thinking) {
+      out += part.thinking;
+    }
+  }
+  return out;
+}
+
+function extractOpenAIDeltaReasoning(delta: unknown): string {
+  if (!delta || typeof delta !== "object") return "";
+  const d = delta as Record<string, unknown>;
+  if (typeof d.reasoning_content === "string" && d.reasoning_content) {
+    return d.reasoning_content;
+  }
+  if (typeof d.reasoning === "string" && d.reasoning) {
+    return d.reasoning;
+  }
+  if (typeof d.thinking === "string" && d.thinking) {
+    return d.thinking;
+  }
+  if (d.reasoning && typeof d.reasoning === "object") {
+    const r = d.reasoning as Record<string, unknown>;
+    if (typeof r.text === "string" && r.text) return r.text;
+    if (typeof r.summary === "string" && r.summary) return r.summary;
+    if (typeof r.content === "string" && r.content) return r.content;
+  }
+  const fromDetails = extractOpenAIReasoningDetailsText(d.reasoning_details);
+  if (fromDetails) return fromDetails;
+  return "";
+}
+
+function extractOpenAIErrorMessage(payload: unknown): string {
+  if (typeof payload === "string") {
+    const trimmed = payload.trim();
+    if (!trimmed) return "";
+    try {
+      return extractOpenAIErrorMessage(JSON.parse(trimmed)) || trimmed;
+    } catch {
+      return trimmed;
+    }
+  }
+  if (!payload || typeof payload !== "object") return "";
+  const obj = payload as Record<string, any>;
+  const err = obj.error;
+  if (typeof err === "string" && err.trim()) return err.trim();
+  if (err && typeof err === "object") {
+    const msg =
+      typeof err.message === "string" && err.message.trim()
+        ? err.message.trim()
+        : "";
+    const code =
+      err.code !== undefined && err.code !== null && String(err.code).trim()
+        ? String(err.code).trim()
+        : typeof err.type === "string" && err.type.trim()
+          ? err.type.trim()
+          : "";
+    const providerDetail =
+      err.metadata?.raw && typeof err.metadata.raw === "string"
+        ? ` (${err.metadata.raw})`
+        : "";
+    if (msg) {
+      return (code ? `[${code}] ${msg}` : msg) + providerDetail;
+    }
+    return JSON.stringify(err);
+  }
+  if (typeof obj.message === "string" && obj.message.trim()) {
+    return obj.message.trim();
+  }
+  return "";
+}
+
 function formatOpenAIReasoningText(
   data: unknown,
   options?: { deepSeekThinkingOutput?: boolean },
@@ -437,11 +519,18 @@ function formatOpenAIReasoningText(data?: any, options: any = {}): any {
       result = `<Thoughts>\n${reasoningContent}\n</Thoughts>\n${result}`;
     }
   }
-  if (reasoningContentField && !result.startsWith("<Thoughts>")) {
+  if (
+    typeof reasoningContentField === "string" &&
+    reasoningContentField &&
+    !result.startsWith("<Thoughts>")
+  ) {
     result = `<Thoughts>\n${reasoningContentField}\n</Thoughts>\n${result}`;
   }
-  const openRouterReasoning: any = message?.reasoning;
-  if (openRouterReasoning) {
+  const openRouterReasoning: any =
+    typeof message?.reasoning === "string" && message.reasoning
+      ? message.reasoning
+      : extractOpenAIDeltaReasoning(message);
+  if (openRouterReasoning && !result.startsWith("<Thoughts>")) {
     result = `<Thoughts>\n${openRouterReasoning}\n</Thoughts>\n${result}`;
   }
   return result;
@@ -457,6 +546,8 @@ export {
   appendOpenAIStreamingFragment,
   buildOpenAIRequestHeaders,
   collectOpenAIToolCalls,
+  extractOpenAIDeltaReasoning,
+  extractOpenAIErrorMessage,
   formatOpenAIReasoningText,
   mergeOpenAIStreamingToolCallDeltas,
   normalizeOpenAIProviderMessages,

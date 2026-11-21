@@ -2199,8 +2199,13 @@ export const languageKorean = {
   popularityLevelDesc:
     "인기도는 이 캐릭터가 얼마나 인기 있는지를 나타냅니다. 여러가지 요소가 영향을 미칩니다.",
   additionalParams: "추가 파라미터",
+  additionalParamsMainModel: "추가 파라미터 — 메인 모델",
+  additionalParamsSubModel: "추가 파라미터 — 보조 모델",
+  additionalParamsPreset: "추가 파라미터 — 프롬프트 프리셋",
   modelAdditionalParamsDesc:
-    "한 줄에 하나씩. `key=value` / `key=json::{...}` / `header::Name=value` / `key={{none}}` 지원. 선택한 모델에 저장됩니다.",
+    "한 줄에 하나씩. `key=value` / `key=json::{...}` / `header::Name=value` / `key={{none}}` 지원. 해당 모델 ID에 영구 저장되며 프리셋을 바꿔도 유지됩니다.",
+  presetAdditionalParamsDesc:
+    "현재 프롬프트 프리셋에 귀속되는 추가 파라미터입니다. 요청 시 [프리셋 추가 파라미터 + 모델별 추가 파라미터]가 합쳐져 적용됩니다.",
   heightMode: "높이 모드",
   useAdvancedEditor: "고급 에디터 사용",
   noWaitForTranslate: "번역 기다리지 않기",
@@ -2593,6 +2598,7 @@ export const languageKorean = {
   auxModelUnderModelSettings: "보조 모델 분리를 모델 설정에 표시",
   seperateModelsForAxModels: "보조 모델 분리",
   axModelsDef: "보조 모델 정의",
+  doNotChangeMainAndSubModels: "프리셋 변경 시 메인/보조 모델 유지",
   doNotChangeSeperateModels: "프리셋 변경 시 분리된 모델 변경하지 않기",
   tools: "도구",
   action: "동작",

@@ -257,13 +257,47 @@ export async function fetchViaDurableModelJob(
     );
   }
 
-  const upstreamStatus = Number(
-    streamResponse.headers.get("x-model-job-upstream-status"),
+  const rawUpstreamStatus = streamResponse.headers.get(
+    "x-model-job-upstream-status",
   );
+  const upstreamStatus =
+    rawUpstreamStatus !== null && rawUpstreamStatus.trim() !== ""
+      ? Number(rawUpstreamStatus)
+      : Number.NaN;
+  if (!streamResponse.ok) {
+    const errorText = await streamResponse.text().catch(() => "");
+    detachAbort();
+    releaseOwnership(false);
+    void (async () => {
+      await fetch(`/api/model-jobs/${encodeURIComponent(jobId)}/claim`, {
+        method: "POST",
+        headers: await authHeaders(),
+      });
+    })().catch(() => {});
+    const safeStatus =
+      Number.isInteger(upstreamStatus) &&
+      upstreamStatus >= 200 &&
+      upstreamStatus <= 599
+        ? upstreamStatus
+        : streamResponse.status >= 200 && streamResponse.status <= 599
+          ? streamResponse.status
+          : 502;
+    return new Response(
+      errorText || `Model job upstream failed (HTTP ${safeStatus}).`,
+      {
+        status: safeStatus,
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "x-model-job-id": jobId,
+        },
+      },
+    );
+  }
   if (
-    !streamResponse.ok ||
     !streamResponse.body ||
-    !Number.isFinite(upstreamStatus)
+    !Number.isInteger(upstreamStatus) ||
+    upstreamStatus < 200 ||
+    upstreamStatus > 599
   ) {
     detachAbort();
     releaseOwnership(true);

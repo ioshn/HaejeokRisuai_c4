@@ -3,6 +3,7 @@ import { settingsStore } from "src/ts/stores/domain/settingsStore.svelte";
 import { language } from "src/lang";
 import {
   collectOpenAIToolCalls,
+  extractOpenAIErrorMessage,
   formatOpenAIReasoningText,
 } from "@risuai/chat-core/openAIProvider.ts";
 import { alertError } from "src/ts/alert";
@@ -250,10 +251,11 @@ export async function interpretOpenAINonStreamingResponse(
     }
   }
 
-  if (dat.error && dat.error.message) {
+  const parsedErrMsg = extractOpenAIErrorMessage(dat);
+  if (parsedErrMsg) {
     return {
       type: "fail",
-      result: language.errors.httpError + `${dat.error.message}`,
+      result: language.errors.httpError + parsedErrMsg,
     };
   }
 

@@ -64,13 +64,15 @@ function parseAdditionalParamLines(params?: string): [string, string][] {
   return additionalParams;
 }
 
-// Per-model parameters come last so they win over the shared ones.
+// Concatenate shared, preset-bound, and persistent model-dependent parameters.
+// Per-model parameters come last so they win over preset and shared ones.
 export function getAdditionalParameters(aiModel?: string): [string, string][] {
   if (!aiModel) {
     return [];
   }
   return [
     ...getSharedAdditionalParameters(aiModel),
+    ...parseAdditionalParamLines(presetStore.state.presetAdditionalParams),
     ...parseAdditionalParamLines(
       settingsStore.state.modelAdditionalParams?.[aiModel],
     ),

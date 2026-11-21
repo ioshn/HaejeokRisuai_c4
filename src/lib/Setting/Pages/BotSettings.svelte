@@ -46,6 +46,8 @@
     import AuxModelSelectors from './Model/AuxModelSelectors.svelte'
     import ModelBrowser from "src/lib/UI/Model/ModelBrowser.svelte";
     import GoogleSafetySettings from "./GoogleSafetySettings.svelte";
+    import { characterStore } from "src/ts/stores/domain/characterStore.svelte";
+    import { resolveChatBoundModel } from "src/ts/process/request/chatModelBinding";
     import PocketRegistryControls from "./Model/PocketRegistryControls.svelte";
     import { pocketRegistryStore } from "src/ts/model/pocketRegistry/state.svelte";
 
@@ -223,10 +225,16 @@
             if (targetModelTab !== 'provider') providerModelRole = targetModelTab
         }
     })
-    let modelInfo = $derived(getModelInfo(presetStore.state.aiModel))
-    let subModelInfo = $derived(getModelInfo(presetStore.state.subModel))
+    let effectiveMainModelId = $derived(
+        resolveChatBoundModel(characterStore.currentChat, 'model') || presetStore.state.aiModel
+    )
+    let effectiveSubModelId = $derived(
+        resolveChatBoundModel(characterStore.currentChat, 'submodel') || presetStore.state.subModel
+    )
+    let modelInfo = $derived(getModelInfo(effectiveMainModelId))
+    let subModelInfo = $derived(getModelInfo(effectiveSubModelId))
     let configuredModelIds = $derived.by(() => {
-        const ids = [presetStore.state.aiModel, presetStore.state.subModel]
+        const ids = [effectiveMainModelId, effectiveSubModelId, presetStore.state.aiModel, presetStore.state.subModel]
         if (presetStore.state.seperateModelsForAxModels) {
             for (const key of ['memory', 'translate', 'emotion', 'otherAx'] as const) {
                 const modelId = presetStore.state.seperateModels[key]
@@ -479,6 +487,8 @@
 
                 <!-- Main Model Options (Bottom) -->
                 <div class="flex flex-col gap-2.5 pt-3 border-t border-darkborderc/60">
+                    <Check bind:check={settingsStore.state.doNotChangeMainAndSubModels} name={language.doNotChangeMainAndSubModels} />
+
                     {#if !usesOllamaCloud && (modelInfo.flags.includes(LLMFlags.hasStreaming) || subModelInfo.flags.includes(LLMFlags.hasStreaming))}
                         <Check bind:check={settingsStore.state.useStreaming} name={`Response ${language.streaming}`} />
 
@@ -1372,21 +1382,57 @@
     <!-- Data-driven basic parameters -->
     <SettingRenderer items={allBasicParameterItems.slice(0, basicParameterItems.length)} {modelInfo} {subModelInfo} />
     <div class="border-t border-darkborderc mt-2 mb-3"></div>
-    <span class="text-textcolor">{language.additionalParams}</span>
-    <span class="text-textcolor2 text-xs mb-1">{language.modelAdditionalParamsDesc}</span>
-    {#key presetStore.state.aiModel}
-        <textarea
-            class="w-full h-24 mb-4 p-2 rounded-md border border-darkborderc bg-transparent text-textcolor text-sm font-mono resize-y focus:border-borderc outline-hidden"
-            spellcheck="false"
-            value={settingsStore.state.modelAdditionalParams?.[presetStore.state.aiModel] ?? ''}
-            onchange={(e) => {
-                const params = { ...(settingsStore.state.modelAdditionalParams ?? {}) }
-                if (e.currentTarget.value.trim()) params[presetStore.state.aiModel] = e.currentTarget.value
-                else delete params[presetStore.state.aiModel]
-                settingsStore.state.modelAdditionalParams = params
-            }}
-        ></textarea>
-    {/key}
+    <div class="flex flex-col gap-3 mb-4">
+        <div class="flex flex-col">
+            <span class="text-textcolor font-medium">{language.additionalParamsMainModel} ({modelInfo.shortName || effectiveMainModelId || language.none})</span>
+            <span class="text-textcolor2 text-xs mb-1">{language.modelAdditionalParamsDesc}</span>
+            {#key effectiveMainModelId}
+                <textarea
+                    class="w-full h-24 p-2 rounded-md border border-darkborderc bg-transparent text-textcolor text-sm font-mono resize-y focus:border-borderc outline-hidden"
+                    spellcheck="false"
+                    disabled={!effectiveMainModelId}
+                    value={effectiveMainModelId ? (settingsStore.state.modelAdditionalParams?.[effectiveMainModelId] ?? '') : ''}
+                    oninput={(e) => {
+                        if (!effectiveMainModelId) return
+                        const params = { ...(settingsStore.state.modelAdditionalParams ?? {}) }
+                        if (e.currentTarget.value.trim()) params[effectiveMainModelId] = e.currentTarget.value
+                        else delete params[effectiveMainModelId]
+                        settingsStore.state.modelAdditionalParams = params
+                    }}
+                ></textarea>
+            {/key}
+        </div>
+
+        <div class="flex flex-col">
+            <span class="text-textcolor font-medium">{language.additionalParamsSubModel} ({subModelInfo.shortName || effectiveSubModelId || language.none})</span>
+            <span class="text-textcolor2 text-xs mb-1">{language.modelAdditionalParamsDesc}</span>
+            {#key effectiveSubModelId}
+                <textarea
+                    class="w-full h-20 p-2 rounded-md border border-darkborderc bg-transparent text-textcolor text-sm font-mono resize-y focus:border-borderc outline-hidden"
+                    spellcheck="false"
+                    disabled={!effectiveSubModelId}
+                    value={effectiveSubModelId ? (settingsStore.state.modelAdditionalParams?.[effectiveSubModelId] ?? '') : ''}
+                    oninput={(e) => {
+                        if (!effectiveSubModelId) return
+                        const params = { ...(settingsStore.state.modelAdditionalParams ?? {}) }
+                        if (e.currentTarget.value.trim()) params[effectiveSubModelId] = e.currentTarget.value
+                        else delete params[effectiveSubModelId]
+                        settingsStore.state.modelAdditionalParams = params
+                    }}
+                ></textarea>
+            {/key}
+        </div>
+
+        <div class="flex flex-col">
+            <span class="text-textcolor font-medium">{language.additionalParamsPreset} ({presetStore.summaries?.[presetStore.activeIndex]?.name || 'Preset'})</span>
+            <span class="text-textcolor2 text-xs mb-1">{language.presetAdditionalParamsDesc}</span>
+            <textarea
+                class="w-full h-20 p-2 rounded-md border border-darkborderc bg-transparent text-textcolor text-sm font-mono resize-y focus:border-borderc outline-hidden"
+                spellcheck="false"
+                bind:value={presetStore.state.presetAdditionalParams}
+            ></textarea>
+        </div>
+    </div>
     <SettingRenderer items={allBasicParameterItems.slice(basicParameterItems.length)} {modelInfo} {subModelInfo} />
     {#if presetStore.state.aiModel === 'textgen_webui' || presetStore.state.aiModel === 'mancer' || presetStore.state.aiModel.startsWith('local_') || presetStore.state.aiModel.startsWith('hf:::')}
         <span class="text-textcolor">Repetition Penalty</span>

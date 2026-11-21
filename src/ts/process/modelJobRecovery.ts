@@ -11,6 +11,7 @@ import { getNodeServerProxyAuth } from "../storage/files/nodeStorage";
 import type { Message } from "../storage/database/schema";
 import type { DurableModelJobRecord } from "../../../packages/protocol/modelJobs.ts";
 import { setRemoteChatGeneration } from "./chat/runtimeState";
+import { extractOpenAIDeltaReasoning } from "@risuai/chat-core/openAIProvider.ts";
 
 export type { DurableModelJobRecord } from "../../../packages/protocol/modelJobs.ts";
 
@@ -61,6 +62,7 @@ function decodeOpenAIJson(value: any): { text: string; reasoning: string } {
   const message = choice?.message ?? choice?.delta ?? {};
   const text = asText(message.content) || asText(choice?.text);
   const reasoning =
+    extractOpenAIDeltaReasoning(message) ||
     asText(message.reasoning_content) ||
     asText(message.reasoning) ||
     asText(message.thinking);

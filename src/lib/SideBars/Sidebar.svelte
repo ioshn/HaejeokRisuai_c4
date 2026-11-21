@@ -1199,7 +1199,7 @@
   {#if sideBarMode === 0}
     {#if btwRuntime.open}
       <LazyComponent loader={btwPanelLoader} />
-    {:else if $selectedCharID < 0 || $settingsOpen}
+    {:else if $selectedCharID < 0}
       <LazyComponent loader={recentSessionsLoader} props={{ reseter }} />
     {:else if characterStore.characters[$selectedCharID]?.chaId === "§playground"}
       <LazyComponent loader={loadSideChatList} />

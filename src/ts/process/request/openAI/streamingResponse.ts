@@ -2,6 +2,8 @@ import { presetStore } from "src/ts/stores/domain/presetStore.svelte";
 import { settingsStore } from "src/ts/stores/domain/settingsStore.svelte";
 import {
   appendOpenAIStreamingFragment,
+  extractOpenAIDeltaReasoning,
+  extractOpenAIErrorMessage,
   mergeOpenAIStreamingToolCallDeltas,
 } from "@risuai/chat-core/openAIProvider.ts";
 import { alertError } from "src/ts/alert";
@@ -44,8 +46,8 @@ export function getTranStream(
       const line = lineBuffer.slice(0, newlineIndex).trimEnd();
       lineBuffer = lineBuffer.slice(newlineIndex + 1);
 
-      if (!line.startsWith("data: ")) continue;
-      const rawChunk = line.slice(6).trim();
+      if (!line.startsWith("data:")) continue;
+      const rawChunk = line.slice(5).trim();
       if (!rawChunk) continue;
 
       hasNewData = true;
@@ -54,8 +56,20 @@ export function getTranStream(
         break;
       }
 
+      let parsed: any;
       try {
-        const parsed = JSON.parse(rawChunk);
+        parsed = JSON.parse(rawChunk);
+      } catch {
+        continue;
+      }
+      if (parsed?.error) {
+        const errMsg =
+          extractOpenAIErrorMessage(parsed) || JSON.stringify(parsed.error);
+        done = true;
+        control.error(new Error(errMsg));
+        return;
+      }
+      try {
         const choices = parsed.choices;
         if (Array.isArray(choices)) {
           for (let c = 0; c < choices.length; c++) {
@@ -77,8 +91,7 @@ export function getTranStream(
               );
             }
 
-            const reasoningChunk =
-              choice?.delta?.reasoning_content ?? choice?.delta?.reasoning;
+            const reasoningChunk = extractOpenAIDeltaReasoning(choice?.delta);
             if (reasoningChunk) {
               reasoningFromStructured = true;
               structuredReasoning = appendOpenAIStreamingFragment(
@@ -175,6 +188,8 @@ export function wrapToolStream(
       let reader = stream.getReader();
       let prefix = "";
       let lastValue;
+
+      try {
 
       const extractThoughts = (text: string) => {
         let reasoningContent = "";
@@ -338,7 +353,9 @@ export function wrapToolStream(
 
               if (
                 resRec.status == 200 &&
-                resRec.headers.get("Content-Type").includes("text/event-stream")
+                (resRec.headers.get("Content-Type") ?? "")
+                  .toLowerCase()
+                  .includes("text/event-stream")
               ) {
                 addFetchLog({
                   body: body,
@@ -359,7 +376,7 @@ export function wrapToolStream(
             }
 
             const transtream = getTranStream(arg);
-            resRec.body.pipeTo(transtream.writable);
+            void resRec.body.pipeTo(transtream.writable).catch(() => {});
 
             reader = transtream.readable.getReader();
 
@@ -376,6 +393,9 @@ export function wrapToolStream(
         lastValue = value;
 
         controller.enqueue({ "0": (prefix ? prefix + "\n\n" : "") + content });
+      }
+      } catch (err) {
+        controller.error(err);
       }
     },
   });

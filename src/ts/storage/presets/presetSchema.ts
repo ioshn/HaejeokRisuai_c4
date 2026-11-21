@@ -279,6 +279,7 @@ export const presetSchema = v.object({
   seperateParameters: defaultObject(separateParameters),
   modelTools: defaultStringArray(),
   verbosity: defaultNumber(1),
+  presetAdditionalParams: defaultString(),
   dynamicOutput: v.fallback(
     v.optional(
       v.custom<DynamicOutput>((input) => !!input && typeof input === "object"),

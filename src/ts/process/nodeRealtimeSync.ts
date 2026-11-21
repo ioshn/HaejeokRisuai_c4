@@ -25,6 +25,10 @@ import {
 import { recoverDurableModelJobs } from "./modelJobRecovery";
 import { localGenerationController } from "./chat/generationCancellation";
 import { getNodeClientSessionId } from "../network/nodeClientSession";
+import {
+  deactivateCurrentSession,
+  isSessionDeactivated,
+} from "../network/sessionExclusivity";
 import type { NodeApiClient } from "@risuai/storage-remote/nodeApiClient";
 import { getActiveStorageRuntime } from "../storage/runtime/activeStorageRuntime";
 import {
@@ -429,6 +433,21 @@ async function dispatchEvent(
   }
   if (frame.event === "local-backup-import-progress") {
     publishNodeBackupProgress(frame.data);
+    return;
+  }
+  if (frame.event === "session-takeover") {
+    if (frame.data.activeClientId !== storage.getClientId()) {
+      started = false;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      setNodeRealtimeConnected(false);
+      deactivateCurrentSession(() => {
+        streamController?.abort();
+        streamController = null;
+      });
+    }
     return;
   }
   if (frame.event === "model-job") {
