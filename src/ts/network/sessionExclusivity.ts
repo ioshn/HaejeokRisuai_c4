@@ -1,9 +1,3 @@
-import { alert } from "../alert";
-import { language } from "../../lang";
-import { getNodeClientSessionId } from "./nodeClientSession";
-import { parseTauriChatWorkspaceLaunch } from "../tauriChatWindows";
-import { isTauri } from "../platform";
-
 let sessionDeactivated = false;
 let localChannel: BroadcastChannel | null = null;
 let localSessionInstalled = false;
@@ -19,18 +13,32 @@ export function deactivateCurrentSession(onShutdown?: () => void): void {
     onShutdown?.();
   } catch {}
 
-  void alert.normalWait(language.activeTabChange).then(() => {
-    location.reload();
-  });
+  void Promise.all([import("../alert"), import("../../lang")])
+    .then(([{ alert }, { language }]) =>
+      alert.normalWait(language.activeTabChange),
+    )
+    .then(() => {
+      location.reload();
+    });
 }
 
-export function initLocalTabExclusivity(): void {
+export async function initLocalTabExclusivity(): Promise<void> {
   if (localSessionInstalled) return;
   if (typeof window === "undefined") return;
+  const [{ isTauri }, { getNodeClientSessionId }] = await Promise.all([
+    import("../platform"),
+    import("./nodeClientSession"),
+  ]);
   // Detached auxiliary chat windows in Tauri intentionally coexist with the main window.
-  if (isTauri && parseTauriChatWorkspaceLaunch(window.location?.search ?? "")) {
-    return;
+  if (isTauri) {
+    const { parseTauriChatWorkspaceLaunch } = await import(
+      "../tauriChatWindows"
+    );
+    if (parseTauriChatWorkspaceLaunch(window.location?.search ?? "")) {
+      return;
+    }
   }
+  if (localSessionInstalled) return;
   localSessionInstalled = true;
   const sessionId = getNodeClientSessionId();
 

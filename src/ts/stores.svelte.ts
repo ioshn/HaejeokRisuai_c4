@@ -1,6 +1,6 @@
 import { selectedCharID } from "./stores/domain/characterSelection";
 import { presetStore } from "src/ts/stores/domain/presetStore.svelte";
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { settingsStore } from "./stores/domain/settingsStore.svelte";
 import { characterStore } from "./stores/domain/characterStore.svelte";
 import { moduleStore } from "./stores/domain/moduleStore.svelte";
