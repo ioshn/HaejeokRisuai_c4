@@ -314,7 +314,7 @@ export async function loadData() {
       registerModelDynamic();
       performance.mark("plugins-ready");
       cleanChunks();
-      initLocalTabExclusivity();
+      void initLocalTabExclusivity();
       initDurableModelJobRecovery();
       void syncChatResponsePush();
       void initNodeRealtimeSync();
