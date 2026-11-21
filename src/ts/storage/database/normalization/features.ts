@@ -104,7 +104,10 @@ const featureScalarDefaults = {
     llmFormatOptions,
     LLMFormat.OpenAICompatible,
   ),
-  doNotChangeSeperateModels: defaultBoolean(false),
+  doNotChangeMainAndSubModels: defaultBoolean(true),
+  doNotChangeSeperateModels: defaultBoolean(true),
+  doNotChangeFallbackModels: defaultBoolean(true),
+  disableSeperateParameterChangeOnPresetChange: defaultBoolean(true),
   seperateModelsForAxModels: defaultBoolean(false),
   enableScrollToActiveChar: defaultBoolean(true),
 };

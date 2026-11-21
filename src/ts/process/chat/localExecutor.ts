@@ -299,7 +299,8 @@ export class LocalChatExecutor implements ChatExecutor {
       });
     } catch (error) {
       if (trackGeneration) cancelChatGenerationStats(generationId);
-      throw error;
+      throwError(error instanceof Error ? error.message : String(error));
+      return false;
     }
     if (!response.ok) {
       if (trackGeneration) cancelChatGenerationStats(generationId);

@@ -1,6 +1,7 @@
 import type { ISqlStorage } from "./ISqlStorage";
 import type { SqlCommit, SqlCommitResult } from "./sqlCommit";
 import { beginSave } from "./saveActivity.svelte";
+import { isSessionDeactivated } from "../../network/sessionExclusivity";
 
 const storageQueues = new WeakMap<ISqlStorage, Promise<void>>();
 
@@ -31,6 +32,9 @@ export function commitSqlChanges(
   const operation = previous
     .catch(() => undefined)
     .then(async () => {
+      if (isSessionDeactivated()) {
+        throw new Error("Session is deactivated because another window or device is active.");
+      }
       const rebased = { ...commit, baseRevision: storage.getRevision() };
       try {
         return await storage.commit(rebased);

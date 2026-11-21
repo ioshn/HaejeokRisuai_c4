@@ -33,10 +33,11 @@ export async function copyPreset(id: number) {
 export function getPresetApplyPolicy(): PresetApplyPolicy {
   const settings = settingsStore.state;
   return {
-    doNotChangeSeperateModels: settings.doNotChangeSeperateModels ?? false,
-    doNotChangeFallbackModels: settings.doNotChangeFallbackModels ?? false,
+    doNotChangeMainAndSubModels: settings.doNotChangeMainAndSubModels ?? true,
+    doNotChangeSeperateModels: settings.doNotChangeSeperateModels ?? true,
+    doNotChangeFallbackModels: settings.doNotChangeFallbackModels ?? true,
     disableSeperateParameterChangeOnPresetChange:
-      settings.disableSeperateParameterChangeOnPresetChange ?? false,
+      settings.disableSeperateParameterChangeOnPresetChange ?? true,
   };
 }
 

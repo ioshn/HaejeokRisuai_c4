@@ -9,6 +9,7 @@ import { isCapacitor, isNodeServer, isTauri, isTauriLinux } from "../platform";
 import { setLinuxWindowDecorationPreference } from "../linuxWindowIntegration";
 import { initNodeRealtimeSync } from "../process/nodeRealtimeSync";
 import { initDurableModelJobRecovery } from "../process/modelJobRecovery";
+import { initLocalTabExclusivity } from "../network/sessionExclusivity";
 import { syncChatResponsePush } from "../network/pushSubscriptions";
 import { checkRisuUpdate } from "../update";
 import { startObserveDom } from "../observer.svelte";
@@ -313,6 +314,7 @@ export async function loadData() {
       registerModelDynamic();
       performance.mark("plugins-ready");
       cleanChunks();
+      initLocalTabExclusivity();
       initDurableModelJobRecovery();
       void syncChatResponsePush();
       void initNodeRealtimeSync();

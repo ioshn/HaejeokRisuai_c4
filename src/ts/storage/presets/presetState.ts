@@ -11,11 +11,13 @@ import { normalizePromptTemplate } from "./promptTemplateNormalization";
 const clone = rfdc();
 
 export interface PresetApplyPolicy {
+  doNotChangeMainAndSubModels?: boolean;
   doNotChangeSeperateModels: boolean;
   doNotChangeFallbackModels: boolean;
   disableSeperateParameterChangeOnPresetChange: boolean;
 }
 export const defaultPresetApplyPolicy: PresetApplyPolicy = {
+  doNotChangeMainAndSubModels: false,
   doNotChangeSeperateModels: false,
   doNotChangeFallbackModels: false,
   disableSeperateParameterChangeOnPresetChange: false,
@@ -41,6 +43,25 @@ export function createPresetSettingsState(
   return state;
 }
 
+/** Values stored globally when main/sub model retention is enabled. */
+export function getMainAndSubModelSettings(state: Partial<PresetSettings>) {
+  return {
+    apiType: state.apiType,
+    aiModel: state.aiModel,
+    subModel: state.subModel,
+    openrouterRequestModel: state.openrouterRequestModel,
+    openrouterSubRequestModel: state.openrouterSubRequestModel,
+    openrouterProvider: state.openrouterProvider,
+    proxyRequestModel: state.proxyRequestModel,
+    customProxyRequestModel: state.customProxyRequestModel,
+    customProxySubRequestModel: state.customProxySubRequestModel,
+    forceReplaceUrl: state.forceReplaceUrl,
+    proxyKey: state.proxyKey,
+    customAPIFormat: state.customAPIFormat,
+    currentPluginProvider: state.currentPluginProvider,
+  };
+}
+
 /** Values stored globally when excluded from the active preset document. */
 export function getSeparateModelSettings(state: Partial<PresetSettings>) {
   return {
@@ -63,6 +84,9 @@ export function applyPresetSettings(
     if (incoming[key] == null && retainsMissingPresetField(key)) {
       Object.assign(state, { [key]: clone(previous[key]) });
     }
+  }
+  if (policy.doNotChangeMainAndSubModels) {
+    Object.assign(state, clone(getMainAndSubModelSettings(previous)));
   }
   if (policy.doNotChangeSeperateModels) {
     Object.assign(state, clone(getSeparateModelSettings(previous)));

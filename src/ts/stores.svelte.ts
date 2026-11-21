@@ -292,6 +292,12 @@ export function openMobileSettingsPage(
   sidebar?: number,
   botTarget?: MobileBotTarget | null,
 ) {
+  if (!get(MobileGUI)) {
+    mobileBotTargetStore.set(botTarget ?? null);
+    SettingsMenuIndex.set(menuIndex);
+    settingsOpen.set(true);
+    return;
+  }
   if (fromCharId !== undefined && fromCharId >= 0) {
     mobileSettingsReturnChar.value = {
       charId: fromCharId,

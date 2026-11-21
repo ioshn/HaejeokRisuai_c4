@@ -2298,8 +2298,13 @@ export const languageEnglish = {
   popularityLevelDesc:
     "Popularity increases with downloads, etc. To estimate, 3.7 popularity is about 1 downloads.",
   additionalParams: "Additional Parameters",
+  additionalParamsMainModel: "Additional Parameters — Main Model",
+  additionalParamsSubModel: "Additional Parameters — Auxiliary Model",
+  additionalParamsPreset: "Additional Parameters — Prompt Preset",
   modelAdditionalParamsDesc:
-    "One per line. Supports `key=value` / `key=json::{...}` / `header::Name=value` / `key={{none}}`. Saved for the selected model.",
+    "One per line. Supports `key=value` / `key=json::{...}` / `header::Name=value` / `key={{none}}`. Persistently saved per model ID regardless of preset changes.",
+  presetAdditionalParamsDesc:
+    "Additional parameters stored on the active prompt preset. Combined with the per-model parameters at request time.",
   heightMode: "Height Mode",
   useAdvancedEditor: "Use Advanced Editor",
   noWaitForTranslate: "No Wait for Translate",
@@ -2692,6 +2697,7 @@ export const languageEnglish = {
   auxModelUnderModelSettings: "Show Separate Aux Models in Model Settings",
   seperateModelsForAxModels: "Separate Models for Auxiliary Models",
   axModelsDef: "Ax Models Definition",
+  doNotChangeMainAndSubModels: "Keep Main/Auxiliary Models on Preset Change",
   doNotChangeSeperateModels: "Do Not Change Separate Models on Preset Change",
   tools: "Tools",
   action: "Action",

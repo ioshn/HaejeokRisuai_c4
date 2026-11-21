@@ -1113,13 +1113,11 @@ export async function requestOpenAIResponseAPI(
   const { requestURL, risuIdentify } = getResponsesRequestURL(arg);
   const headers = buildResponsesHeaders(arg, risuIdentify);
 
-  if (aiModel === "reverse_proxy" || aiModel?.startsWith("xcustom:::")) {
-    body = applyAdditionalParameters(
-      body,
-      headers,
-      getAdditionalParameters(aiModel),
-    );
-  }
+  body = applyAdditionalParameters(
+    body,
+    headers,
+    getAdditionalParameters(aiModel),
+  );
   if (!arg.useStreaming) {
     body.stream = false;
   }

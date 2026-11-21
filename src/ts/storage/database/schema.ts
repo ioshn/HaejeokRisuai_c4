@@ -381,6 +381,7 @@ export interface DatabaseSettings extends PresetSettings {
   coldstorage: boolean;
   claudeRetrivalCaching: boolean;
   playMessageOnTranslateEnd: boolean;
+  doNotChangeMainAndSubModels?: boolean;
   doNotChangeSeperateModels: boolean;
   hotkeys: Hotkey[];
   doNotChangeFallbackModels: boolean;

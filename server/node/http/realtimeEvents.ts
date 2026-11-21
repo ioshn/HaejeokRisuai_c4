@@ -365,6 +365,23 @@ export function createRealtimeEventHub(
 
   /** Registers a client and sends its ready snapshot. / 클라이언트를 등록하고 준비 스냅샷을 보냅니다. */
   function readyClient(client: RealtimeClient): void {
+    if (client.clientId) {
+      const takeoverRecord: RealtimeEventRecord = {
+        event: "session-takeover",
+        data: { activeClientId: client.clientId },
+      };
+      for (const existing of clients) {
+        if (existing.clientId && existing.clientId !== client.clientId) {
+          try {
+            if (!sendToClient(existing, takeoverRecord)) {
+              clients.delete(existing);
+            }
+          } catch {
+            clients.delete(existing);
+          }
+        }
+      }
+    }
     clients.add(client);
     sendToClient(client, {
       event: "ready",

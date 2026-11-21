@@ -123,6 +123,10 @@ export type RealtimeDatabaseChangeEvent = Partial<SqlCommitImpact> & {
   readonly pluginEnabled?: boolean;
 };
 
+export interface RealtimeSessionTakeoverEvent {
+  readonly activeClientId: string;
+}
+
 /**
  * Canonical realtime event map shared by server producers and frontend
  * consumers. Every hub broadcast and every client-side parse is keyed by these
@@ -142,6 +146,7 @@ export interface RealtimeEventMap {
   "model-job": RealtimeModelJobEvent;
   "generation-state": RealtimeGenerationStateEvent;
   "local-backup-import-progress": RealtimeLocalBackupImportProgressEvent;
+  "session-takeover": RealtimeSessionTakeoverEvent;
   ready: RealtimeReadyEvent;
   "resync-required": RealtimeResyncRequiredEvent;
 }
@@ -157,10 +162,14 @@ export type RealtimeEventName = keyof RealtimeEventMap;
  */
 export type RealtimeBroadcastEventName = Exclude<
   RealtimeEventName,
-  "ready" | "resync-required" | "local-backup-import-progress"
+  | "ready"
+  | "resync-required"
+  | "local-backup-import-progress"
+  | "session-takeover"
 >;
 
-export type RealtimeTransientEventName = "local-backup-import-progress";
+export type RealtimeTransientEventName =
+  "local-backup-import-progress" | "session-takeover";
 
 /** Wire payload for a realtime event name. 실시간 이벤트 이름의 페이로드입니다. */
 export type RealtimeEventPayload<
@@ -659,6 +668,15 @@ export function parseRealtimeEvent(
     return payload === null
       ? null
       : { event: "local-backup-import-progress", data: payload };
+  }
+  if (eventName === "session-takeover") {
+    if (!isRecord(data)) return null;
+    const activeClientId = readString(
+      data.activeClientId,
+      MAX_EVENT_CLIENT_ID_LENGTH,
+    );
+    if (!activeClientId) return null;
+    return { event: "session-takeover", data: { activeClientId } };
   }
   if (eventName === "ready") {
     const payload: RealtimeReadyEvent | null = parseReadyEvent(data);

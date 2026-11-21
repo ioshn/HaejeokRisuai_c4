@@ -3,6 +3,7 @@ import {
   fetchNative,
   textifyReadableStream,
 } from "src/ts/globalApi.svelte";
+import { extractOpenAIErrorMessage } from "@risuai/chat-core/openAIProvider.ts";
 import { isNodeServer, isTauri } from "src/ts/platform";
 import type {
   RequestDataArgumentExtended,
@@ -60,16 +61,22 @@ export async function requestOpenAIStreamingTransport(
   });
 
   if (response.status !== 200) {
+    const rawErr = await textifyReadableStream(response.body);
     return {
       type: "fail",
-      result: await textifyReadableStream(response.body),
+      result: extractOpenAIErrorMessage(rawErr) || rawErr,
     };
   }
 
-  if (!response.headers.get("Content-Type").includes("text/event-stream")) {
+  if (
+    !(response.headers.get("Content-Type") ?? "")
+      .toLowerCase()
+      .includes("text/event-stream")
+  ) {
+    const rawErr = await textifyReadableStream(response.body);
     return {
       type: "fail",
-      result: await textifyReadableStream(response.body),
+      result: extractOpenAIErrorMessage(rawErr) || rawErr,
     };
   }
   addFetchLog({
@@ -81,7 +88,7 @@ export async function requestOpenAIStreamingTransport(
   });
 
   const transtream = getTranStream(arg);
-  response.body.pipeTo(transtream.writable);
+  void response.body.pipeTo(transtream.writable).catch(() => {});
 
   return {
     type: "streaming",
