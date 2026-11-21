@@ -74,6 +74,8 @@
         isComment: boolean
         activeStreaming: boolean
         rerollIcon: boolean
+        targetCharacterIndex: number
+        targetChatIndex: number
         generationInfo: Message['generationInfo']
     }
     type RenderEntry = {
@@ -101,6 +103,8 @@
         left.isComment === right.isComment &&
         left.activeStreaming === right.activeStreaming &&
         left.rerollIcon === right.rerollIcon &&
+        left.targetCharacterIndex === right.targetCharacterIndex &&
+        left.targetChatIndex === right.targetChatIndex &&
         isEqual(left.generationInfo, right.generationInfo);
 
     const clearChatBody = () => {
@@ -170,6 +174,8 @@
                 isComment: message.isComment ?? false,
                 activeStreaming: activeStreamingMessage,
                 rerollIcon,
+                targetCharacterIndex,
+                targetChatIndex,
                 generationInfo: message.generationInfo,
             };
             let entry = renderEntries.get(key);

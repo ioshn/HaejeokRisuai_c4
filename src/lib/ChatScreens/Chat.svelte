@@ -29,6 +29,7 @@
 
     let translating = $state(false)
     let editMode = $state(false)
+    let editMessageText = $state('')
     let statusMessage:string = $state('')
     let retranslate = $state(false)
     let editTranslationMode = $state(false)
@@ -137,22 +138,37 @@
         return { characterIndex, chatIndex }
     }
 
+    function resolveCurrentMessageIndex(): number {
+        const char = characterStore.characters[targetCharacterIndex]
+        const chat = char?.chats?.[targetChatIndex]
+        if (!chat?.message) return idx
+        const messageId = sourceMessage?.chatId
+        if (messageId) {
+            const current = chat.message[idx]
+            if (current?.chatId === messageId) return idx
+            const found = chat.message.findIndex((item) => item?.chatId === messageId)
+            if (found >= 0) return found
+        }
+        return idx
+    }
+
     async function ensureFullMessageIndex(): Promise<number> {
         const { characterIndex, chatIndex } = findChatIndex()
         const character = characterStore.characters[characterIndex]
         const chat = character?.chats?.[chatIndex]
-        const messageId = chat?.message?.[idx]?.chatId
-        if (!chat || chat.messagesFullyLoaded !== false) return idx
+        const currentIndex = resolveCurrentMessageIndex()
+        const messageId = sourceMessage?.chatId ?? chat?.message?.[currentIndex]?.chatId
+        if (!chat || chat.messagesFullyLoaded !== false) return currentIndex
 
         await preLoadChat(characterIndex, chatIndex, { full: true })
-        if (!messageId) return idx
+        if (!messageId) return currentIndex
         return chat.message.findIndex((item) => item.chatId === messageId)
     }
 
     async function rerollAtCurrentMessage(action: 'previous'|'next'|'reroll') {
         // Reroll is keyed by the visible message ID. Expanding a paged chat to
         // its full history here made the button block for seconds on Android.
-        const targetIndex = idx
+        const targetIndex = resolveCurrentMessageIndex()
         if (action === 'previous') {
             await unReroll(targetIndex)
         } else if (action === 'next') {
@@ -212,7 +228,7 @@
     }
 
     async function saveEditedMessage(newData: string, createBranch = false){
-        const targetIndex = createBranch ? idx : await ensureFullMessageIndex()
+        const targetIndex = createBranch ? resolveCurrentMessageIndex() : await ensureFullMessageIndex()
         if (targetIndex < 0) return
         const char = characterStore.characters[targetCharacterIndex]
         const currentChat = char?.chats?.[targetChatIndex]
@@ -221,6 +237,7 @@
 
         if (createBranch) {
             currentChat.id ??= v4()
+            await messageStore.flush()
             const storage = await getSqlBranchStorage()
             const branches = await storage.listChatBranches(currentChat.id)
             const parentBranchId = currentChat.activeBranchId
@@ -258,11 +275,12 @@
     }
 
     async function edit(createBranch = false){
-        await saveEditedMessage(message, createBranch)
+        await saveEditedMessage(editMessageText, createBranch)
     }
 
     function startOriginalEdit() {
         if (originalEditControlDisabled) return
+        editMessageText = message
         editMode = true
     }
 
@@ -297,7 +315,6 @@
             return
         }
 
-        message = e.detail.newData
         await saveEditedMessage(e.detail.newData, false)
         displaya(e.detail.newData)
     }
@@ -672,7 +689,7 @@
         }} />
     {/if}
     {#if editMode}
-        <AutoresizeArea bind:value={message} handleLongPress={() => {
+        <AutoresizeArea bind:value={editMessageText} handleLongPress={() => {
             editMode = false
         }} />
     {:else if isComment}
@@ -1169,7 +1186,7 @@
     {#if idx > -1}
     <button title={language.branch} class="flex items-center hover:text-blue-500 transition-colors button-icon-branch" onclick={async () => {
         await sleep(1)
-        const targetIndex = idx
+        const targetIndex = resolveCurrentMessageIndex()
         if (targetIndex < 0) return
         const char = characterStore.characters[targetCharacterIndex]
         const currentChat = char.chats[targetChatIndex]
@@ -1177,6 +1194,7 @@
         currentChat.id ??= v4()
         const currentMessage = currentChat.message[targetIndex]
         if(!currentMessage?.chatId) throw new Error('Cannot branch a message without a persistent message id')
+        await messageStore.flush()
         const storage = await getSqlBranchStorage()
         const branches = await storage.listChatBranches(currentChat.id)
         const parentBranchId = currentChat.activeBranchId
@@ -1481,7 +1499,7 @@
                         </div>
                         {#if editMode}
                             <div class="grow flex flex-col">
-                                <textarea class="grow h-138 sm:h-96 overflow-y-auto bg-darkbg/50 text-textcolor border border-darkborderc rounded-lg p-3 mb-2 resize-none message-edit-area focus:outline-hidden focus:border-borderc" bind:value={message}></textarea>
+                                <textarea class="grow h-138 sm:h-96 overflow-y-auto bg-darkbg/50 text-textcolor border border-darkborderc rounded-lg p-3 mb-2 resize-none message-edit-area focus:outline-hidden focus:border-borderc" bind:value={editMessageText}></textarea>
                                 <div class="flex justify-end gap-2">
                                     <button class="text-sm px-3 py-1.5 text-textcolor2 border border-darkborderc hover:bg-darkbutton rounded-md hover:text-textcolor transition-all flex items-center gap-1" onclick={() => {
                                         editMode = false
