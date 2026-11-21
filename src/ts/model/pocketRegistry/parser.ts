@@ -33,6 +33,7 @@ export interface CompactRegistryProvider {
   endpointKinds: string[];
   capabilities?: string[];
   defaultEndpointUrl?: string;
+  schema?: CompactSchemaHint[];
 }
 
 export interface CompactRegistryProfile {
@@ -257,12 +258,43 @@ function mapProviderInfo(
   }
 }
 
+const BASE_PROVIDER_SCHEMA_KEYS = new Set([
+  "reasoning_effort",
+  "thinkingLevel",
+  "thinkingBudget",
+  "effort",
+  "thinking_type",
+]);
+
+function mergeCompactSchemas(
+  baseSchema: CompactSchemaHint[] | undefined,
+  profileSchema: CompactSchemaHint[] | undefined,
+): CompactSchemaHint[] {
+  const safeBase = Array.isArray(baseSchema) ? baseSchema.filter(Boolean) : [];
+  const safeProfile = Array.isArray(profileSchema)
+    ? profileSchema.filter(Boolean)
+    : [];
+  if (safeBase.length === 0) return safeProfile;
+  if (safeProfile.length === 0) return safeBase;
+  const overrideKeys = new Set(safeProfile.map((s) => s.k));
+  return [
+    ...safeBase.filter((s) => !overrideKeys.has(s.k)),
+    ...safeProfile,
+  ];
+}
+
 function inferFlagsAndParameters(
   profile: CompactRegistryProfile,
   providerMeta: PocketRegistryProviderMeta,
-): { flags: LLMFlags[]; parameters: LLMParameter[] } {
+  baseProvider?: CompactRegistryProvider,
+): {
+  flags: LLMFlags[];
+  parameters: LLMParameter[];
+  reasoningEffortPath?: string;
+  reasoningEffortOptions?: string[];
+} {
   const caps = new Set(profile.capabilities ?? []);
-  const schema = profile.schema ?? [];
+  const schema = mergeCompactSchemas(baseProvider?.schema, profile.schema);
   const schemaKeys = new Set(schema.map((s) => s.k));
   const flags = new Set<LLMFlags>();
   const params = new Set<LLMParameter>();
@@ -275,11 +307,13 @@ function inferFlagsAndParameters(
 
   if (providerMeta.format === LLMFormat.Anthropic) {
     flags.add(LLMFlags.hasFirstSystemPrompt);
-    if (schemaKeys.has("temperature") || schema.length === 0) {
+    if (schemaKeys.has("temperature") || (profile.schema ?? []).length === 0) {
       for (const p of ClaudeParameters) params.add(p);
     }
     const thinkingTypeHint = findHint("thinking_type") ?? findHint("extended_thinking");
     const effortHint = findHint("effort");
+    let reasoningEffortPath: string | undefined;
+    let reasoningEffortOptions: string[] | undefined;
     if (thinkingTypeHint) {
       const enums = (thinkingTypeHint.e ?? []).map(String);
       if (enums.includes("adaptive")) {
@@ -302,8 +336,17 @@ function inferFlagsAndParameters(
       if (enums.includes("xhigh")) {
         flags.add(LLMFlags.claudeXHighEffort);
       }
+      reasoningEffortPath = effortHint.p || "output_config.effort";
+      if (enums.length > 0) {
+        reasoningEffortOptions = enums;
+      }
     }
-    return { flags: [...flags], parameters: [...params] };
+    return {
+      flags: [...flags],
+      parameters: [...params],
+      reasoningEffortPath,
+      reasoningEffortOptions,
+    };
   }
 
   if (
@@ -317,14 +360,25 @@ function inferFlagsAndParameters(
       flags.add(LLMFlags.hasAudioInput);
       flags.add(LLMFlags.hasVideoInput);
     }
+    let reasoningEffortPath: string | undefined;
+    let reasoningEffortOptions: string[] | undefined;
     if (caps.has("reasoning") || schemaKeys.has("thinkingLevel") || schemaKeys.has("thinkingBudget")) {
       flags.add(LLMFlags.geminiThinking);
-      const levelHint = findHint("thinkingLevel");
-      if (levelHint?.e && !levelHint.e.map(String).includes("minimal")) {
-        flags.add(LLMFlags.geminiThinkingNoMinimal);
-      }
-      if (schemaKeys.has("thinkingLevel")) {
+      const isGemini25 = /gemini-2\.5/.test(profile.modelId);
+      const levelHint = isGemini25 ? undefined : findHint("thinkingLevel");
+      if (levelHint) {
+        const enums = (levelHint.e ?? []).map(String);
+        if (enums.length > 0 && !enums.includes("minimal")) {
+          flags.add(LLMFlags.geminiThinkingNoMinimal);
+        }
         params.add("reasoning_effort");
+        if (enums.includes("xhigh")) {
+          params.add("reasoning_effort_xhigh");
+        }
+        reasoningEffortPath = "thinkingConfig.thinkingLevel";
+        if (enums.length > 0) {
+          reasoningEffortOptions = enums;
+        }
       } else {
         params.add("thinking_tokens");
       }
@@ -339,7 +393,12 @@ function inferFlagsAndParameters(
       params.add("top_p");
       params.add("top_k");
     }
-    return { flags: [...flags], parameters: [...params] };
+    return {
+      flags: [...flags],
+      parameters: [...params],
+      reasoningEffortPath,
+      reasoningEffortOptions,
+    };
   }
 
   // OpenAI & OpenAI-compatible gateways / DeepSeek
@@ -349,13 +408,24 @@ function inferFlagsAndParameters(
     flags.add(LLMFlags.mustStartWithUserInput);
     flags.add(LLMFlags.hasPrefill);
     flags.add(LLMFlags.deepSeekPrefix);
+    let reasoningEffortPath: string | undefined;
+    let reasoningEffortOptions: string[] | undefined;
     if (caps.has("reasoning")) {
       flags.add(LLMFlags.deepSeekThinkingInput);
       flags.add(LLMFlags.deepSeekThinkingOutput);
       flags.add(LLMFlags.deepSeekThinkingToggle);
+      const dsHint = findHint("reasoning_effort");
+      reasoningEffortPath = "thinking.reasoning_effort";
+      const enums = (dsHint?.e ?? []).map(String);
+      reasoningEffortOptions = enums.length > 0 ? enums : ["high", "max"];
     }
     for (const p of OpenAIParameters) params.add(p);
-    return { flags: [...flags], parameters: [...params] };
+    return {
+      flags: [...flags],
+      parameters: [...params],
+      reasoningEffortPath,
+      reasoningEffortOptions,
+    };
   }
 
   flags.add(LLMFlags.hasFullSystemPrompt);
@@ -375,20 +445,35 @@ function inferFlagsAndParameters(
   for (const p of OpenAIParameters) params.add(p);
 
   const reasoningHint = findHint("reasoning_effort");
-  if (reasoningHint) {
+  const hasExplicitProfileReasoningHint = (profile.schema ?? []).some(
+    (s) => s.k === "reasoning_effort",
+  );
+  let reasoningEffortPath: string | undefined;
+  let reasoningEffortOptions: string[] | undefined;
+  if (reasoningHint && (hasExplicitProfileReasoningHint || caps.has("reasoning"))) {
     params.add("reasoning_effort");
     const enums = (reasoningHint.e ?? []).map(String);
     if (enums.includes("none")) params.add("reasoning_effort_none");
     if (enums.includes("xhigh")) params.add("reasoning_effort_xhigh");
+    reasoningEffortPath = reasoningHint.p || "reasoning_effort";
+    if (enums.length > 0) {
+      reasoningEffortOptions = enums;
+    }
   } else if (caps.has("reasoning") && providerMeta.id === "openai") {
     params.add("reasoning_effort");
+    reasoningEffortPath = "reasoning_effort";
   }
 
   if (schemaKeys.has("verbosity")) {
     params.add("verbosity");
   }
 
-  return { flags: [...flags], parameters: [...params] };
+  return {
+    flags: [...flags],
+    parameters: [...params],
+    reasoningEffortPath,
+    reasoningEffortOptions,
+  };
 }
 
 function resolveLegacyModelId(
@@ -423,7 +508,19 @@ export function convertCatalogToCompactBundle(rawCatalog: any): CompactRegistryB
   const providers: Record<string, CompactRegistryProvider> = {};
   for (const [id, bp] of Object.entries<any>(rawCatalog?.baseProviders ?? {})) {
     if (!bp?.id) continue;
-    providers[id] = {
+    const baseSchemaHints: CompactSchemaHint[] = [];
+    if (Array.isArray(bp.requestSchema)) {
+      for (const f of bp.requestSchema) {
+        if (!f?.key || !BASE_PROVIDER_SCHEMA_KEYS.has(f.key)) continue;
+        const enumVals = Array.isArray(f.enum) ? f.enum.map((e: any) => e.value) : [];
+        const hint: CompactSchemaHint = { k: f.key };
+        if (f.mapsTo?.path && f.mapsTo.path !== f.key) hint.p = f.mapsTo.path;
+        if (enumVals.length > 0) hint.e = enumVals;
+        if (f.default !== undefined && f.default !== null) hint.d = f.default;
+        baseSchemaHints.push(hint);
+      }
+    }
+    const providerItem: CompactRegistryProvider = {
       id: bp.id,
       displayName: bp.displayName || bp.id,
       adapterKind: bp.adapterKind || "openai-compatible",
@@ -431,6 +528,10 @@ export function convertCatalogToCompactBundle(rawCatalog: any): CompactRegistryB
       endpointKinds: Array.isArray(bp.endpointKinds) ? bp.endpointKinds : [],
       capabilities: Array.isArray(bp.capabilities) ? bp.capabilities : [],
     };
+    if (baseSchemaHints.length > 0) {
+      providerItem.schema = baseSchemaHints;
+    }
+    providers[id] = providerItem;
   }
 
   const profiles: CompactRegistryProfile[] = [];
@@ -516,8 +617,14 @@ export function parseCompactBundleToModels(bundle: CompactRegistryBundle): {
     const providerMeta = providerMetaMap.get(profile.providerBaseId);
     if (!providerMeta) continue;
 
+    const baseProvider = bundle.providers?.[profile.providerBaseId];
     const id = resolveLegacyModelId(profile, providerMeta);
-    const { flags, parameters } = inferFlagsAndParameters(profile, providerMeta);
+    const {
+      flags,
+      parameters,
+      reasoningEffortPath,
+      reasoningEffortOptions,
+    } = inferFlagsAndParameters(profile, providerMeta, baseProvider);
     const endpointUrl = profile.endpointUrl || providerMeta.defaultEndpointUrl;
 
     const cleanName = profile.displayName.startsWith(`${providerMeta.displayName} `)
@@ -541,6 +648,8 @@ export function parseCompactBundleToModels(bundle: CompactRegistryBundle): {
       endpoint:
         providerMeta.format === LLMFormat.OpenAICompatible ? endpointUrl : undefined,
       fromPocketRegistry: true,
+      reasoningEffortPath,
+      reasoningEffortOptions,
     };
 
     models.push(model);
@@ -605,6 +714,13 @@ export function loadActiveCompactBundle(): {
     try {
       const parsed = JSON.parse(cachedRaw) as CompactRegistryBundle;
       if (parsed && Array.isArray(parsed.profiles) && parsed.providers) {
+        // Backfill base-provider reasoning schema hints from bundled data when
+        // loading an older cached bundle created before provider schemas existed.
+        for (const [id, prov] of Object.entries(parsed.providers)) {
+          if (prov && !prov.schema && fallback.providers?.[id]?.schema) {
+            prov.schema = fallback.providers[id].schema;
+          }
+        }
         let syncedAt: number | null = null;
         if (metaRaw) {
           try {

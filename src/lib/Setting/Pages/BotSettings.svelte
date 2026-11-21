@@ -50,6 +50,7 @@
     import { resolveChatBoundModel } from "src/ts/process/request/chatModelBinding";
     import PocketRegistryControls from "./Model/PocketRegistryControls.svelte";
     import { pocketRegistryStore } from "src/ts/model/pocketRegistry/state.svelte";
+    import { resolveModelReasoningEffortMeta } from "src/ts/process/request/shared";
 
     let modelTab = $state<'main' | 'sub' | 'provider'>('main');
     let providerModelRole = $state<'main' | 'sub' | 'memory' | 'translate' | 'emotion' | 'otherAx'>('main');
@@ -233,6 +234,35 @@
     )
     let modelInfo = $derived(getModelInfo(effectiveMainModelId))
     let subModelInfo = $derived(getModelInfo(effectiveSubModelId))
+    let mainReasoningMeta = $derived(resolveModelReasoningEffortMeta(modelInfo))
+    let subReasoningMeta = $derived(resolveModelReasoningEffortMeta(subModelInfo))
+
+    const REASONING_EFFORT_LABELS: Record<string, string> = {
+        none: 'None',
+        minimal: 'Minimal',
+        low: 'Low',
+        medium: 'Medium',
+        high: 'High',
+        xhigh: 'Extra High (xhigh)',
+        max: 'Max',
+    };
+
+    function formatReasoningEffortOption(value: string): string {
+        return REASONING_EFFORT_LABELS[value] ?? value;
+    }
+
+    function getModelReasoningEffortValue(modelId: string | undefined): string {
+        if (!modelId) return '';
+        return settingsStore.state.modelReasoningEffort?.[modelId] ?? '';
+    }
+
+    function setModelReasoningEffortValue(modelId: string | undefined, value: string) {
+        if (!modelId) return;
+        const next = { ...(settingsStore.state.modelReasoningEffort ?? {}) };
+        if (value) next[modelId] = value;
+        else delete next[modelId];
+        settingsStore.state.modelReasoningEffort = next;
+    }
     let configuredModelIds = $derived.by(() => {
         const ids = [effectiveMainModelId, effectiveSubModelId, presetStore.state.aiModel, presetStore.state.subModel]
         if (presetStore.state.seperateModelsForAxModels) {
@@ -1383,9 +1413,32 @@
     <SettingRenderer items={allBasicParameterItems.slice(0, basicParameterItems.length)} {modelInfo} {subModelInfo} />
     <div class="border-t border-darkborderc mt-2 mb-3"></div>
     <div class="flex flex-col gap-3 mb-4">
-        <div class="flex flex-col">
+        <div class="flex flex-col gap-1.5">
             <span class="text-textcolor font-medium">{language.additionalParamsMainModel} ({modelInfo.shortName || effectiveMainModelId || language.none})</span>
-            <span class="text-textcolor2 text-xs mb-1">{language.modelAdditionalParamsDesc}</span>
+            {#if mainReasoningMeta && effectiveMainModelId}
+                {@const mainEffortVal = getModelReasoningEffortValue(effectiveMainModelId)}
+                {@const mainEffortOptions = mainEffortVal && !mainReasoningMeta.options.includes(mainEffortVal) ? [...mainReasoningMeta.options, mainEffortVal] : mainReasoningMeta.options}
+                <div class="flex flex-col gap-1 mb-1">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-textcolor text-xs font-medium">{language.modelReasoningEffortLabel}</span>
+                        <span class="text-[11px] text-textcolor2/70 font-mono">→ {mainReasoningMeta.path}</span>
+                    </div>
+                    {#key effectiveMainModelId}
+                        <SelectInput
+                            size="sm"
+                            value={mainEffortVal}
+                            onchange={(e) => setModelReasoningEffortValue(effectiveMainModelId, e.currentTarget.value)}
+                        >
+                            <OptionInput value="">{language.modelReasoningEffortDefault}</OptionInput>
+                            {#each mainEffortOptions as opt}
+                                <OptionInput value={opt}>{formatReasoningEffortOption(opt)}</OptionInput>
+                            {/each}
+                        </SelectInput>
+                    {/key}
+                    <span class="text-textcolor2 text-[11px]">{language.modelReasoningEffortDesc}</span>
+                </div>
+            {/if}
+            <span class="text-textcolor2 text-xs">{language.modelAdditionalParamsDesc}</span>
             {#key effectiveMainModelId}
                 <textarea
                     class="w-full h-24 p-2 rounded-md border border-darkborderc bg-transparent text-textcolor text-sm font-mono resize-y focus:border-borderc outline-hidden"
@@ -1403,9 +1456,32 @@
             {/key}
         </div>
 
-        <div class="flex flex-col">
+        <div class="flex flex-col gap-1.5">
             <span class="text-textcolor font-medium">{language.additionalParamsSubModel} ({subModelInfo.shortName || effectiveSubModelId || language.none})</span>
-            <span class="text-textcolor2 text-xs mb-1">{language.modelAdditionalParamsDesc}</span>
+            {#if subReasoningMeta && effectiveSubModelId}
+                {@const subEffortVal = getModelReasoningEffortValue(effectiveSubModelId)}
+                {@const subEffortOptions = subEffortVal && !subReasoningMeta.options.includes(subEffortVal) ? [...subReasoningMeta.options, subEffortVal] : subReasoningMeta.options}
+                <div class="flex flex-col gap-1 mb-1">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-textcolor text-xs font-medium">{language.modelReasoningEffortLabel}</span>
+                        <span class="text-[11px] text-textcolor2/70 font-mono">→ {subReasoningMeta.path}</span>
+                    </div>
+                    {#key effectiveSubModelId}
+                        <SelectInput
+                            size="sm"
+                            value={subEffortVal}
+                            onchange={(e) => setModelReasoningEffortValue(effectiveSubModelId, e.currentTarget.value)}
+                        >
+                            <OptionInput value="">{language.modelReasoningEffortDefault}</OptionInput>
+                            {#each subEffortOptions as opt}
+                                <OptionInput value={opt}>{formatReasoningEffortOption(opt)}</OptionInput>
+                            {/each}
+                        </SelectInput>
+                    {/key}
+                    <span class="text-textcolor2 text-[11px]">{language.modelReasoningEffortDesc}</span>
+                </div>
+            {/if}
+            <span class="text-textcolor2 text-xs">{language.modelAdditionalParamsDesc}</span>
             {#key effectiveSubModelId}
                 <textarea
                     class="w-full h-20 p-2 rounded-md border border-darkborderc bg-transparent text-textcolor text-sm font-mono resize-y focus:border-borderc outline-hidden"

@@ -37,6 +37,7 @@ import {
 } from "../providerRoleSettings";
 import {
   applyAdditionalParameters,
+  applyModelReasoningEffort,
   applyParameters,
   getAdditionalParameters,
   isReasoningCapabilityParameter,
@@ -497,10 +498,19 @@ async function buildResponsesBody(
     },
   );
 
+  body = applyModelReasoningEffort(
+    body,
+    arg.aiModel,
+    arg.modelInfo,
+    "reasoning.effort",
+  );
   if (body.tools.length === 0) {
     delete body.tools;
   }
-  if (arg.modelInfo.parameters.includes("reasoning_effort" as any)) {
+  if (
+    arg.modelInfo.parameters.includes("reasoning_effort" as any) ||
+    body.reasoning?.effort
+  ) {
     body.reasoning ??= {};
     body.reasoning.summary ??= "auto";
   }

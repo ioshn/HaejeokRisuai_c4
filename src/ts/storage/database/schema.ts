@@ -476,6 +476,8 @@ export interface DatabaseSettings extends PresetSettings {
   togglePresets?: TogglePreset[];
   /** `key=value` lines keyed by model id, added to that model's requests. */
   modelAdditionalParams?: Record<string, string>;
+  /** Reasoning effort value keyed by model id (e.g. "low", "medium", "high", "xhigh"). Persists across preset switches. */
+  modelReasoningEffort?: Record<string, string>;
   generationStatsPosition?: GenerationStatsPosition;
   chatLoadInitialPages?: number;
   chatLoadAdditionalPages?: number;

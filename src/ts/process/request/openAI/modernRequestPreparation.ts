@@ -29,8 +29,10 @@ import {
 } from "../providerRoleSettings";
 import {
   applyAdditionalParameters,
+  applyModelReasoningEffort,
   applyParameters,
   getAdditionalParameters,
+  getModelReasoningEffort,
 } from "../shared";
 import { getLocalNetworkRequestOptions } from "./shared";
 import type { OpenAIChatExtra } from "./types";
@@ -133,17 +135,32 @@ export async function prepareModernOpenAIRequest(
         : undefined,
   });
 
-  body = applyParameters(body, arg.modelInfo.parameters, {}, arg.mode, {
-    modelId: arg.modelInfo.id,
-  });
+  const openAIParamRename = arg.modelInfo.reasoningEffortPath
+    ? { reasoning_effort: arg.modelInfo.reasoningEffortPath }
+    : {};
+  body = applyParameters(
+    body,
+    arg.modelInfo.parameters,
+    openAIParamRename,
+    arg.mode,
+    {
+      modelId: arg.modelInfo.id,
+    },
+  );
 
+  const modelDeepSeekEffort = arg.modelInfo.flags.includes(
+    LLMFlags.deepSeekThinkingToggle,
+  )
+    ? getModelReasoningEffort(aiModel)
+    : undefined;
   const hasTools = Boolean(arg.tools && arg.tools.length > 0);
   const postPolicies = applyOpenAIPostParameterBodyPolicies(body, {
     deepSeekThinkingToggle: arg.modelInfo.flags.includes(
       LLMFlags.deepSeekThinkingToggle,
     ),
     deepSeekThinkingType: presetStore.state.deepseekThinkingType,
-    deepSeekReasoningEffort: presetStore.state.deepseekReasoningEffort,
+    deepSeekReasoningEffort:
+      modelDeepSeekEffort ?? presetStore.state.deepseekReasoningEffort,
     toolDefinitions: hasTools
       ? arg.tools.map((tool) => ({
           type: "function",
@@ -228,6 +245,9 @@ export async function prepareModernOpenAIRequest(
     headers["HTTP-Referer"] = "https://risuai.xyz";
   }
 
+  if (!arg.modelInfo.flags.includes(LLMFlags.deepSeekThinkingToggle)) {
+    body = applyModelReasoningEffort(body, aiModel, arg.modelInfo);
+  }
   body = applyAdditionalParameters(
     body,
     headers,

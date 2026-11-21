@@ -44,6 +44,7 @@ import {
   applyAdditionalParameters,
   applyParameters,
   getAdditionalParameters,
+  getModelReasoningEffort,
 } from "./shared";
 
 export async function requestClaude(
@@ -207,7 +208,10 @@ export async function requestClaude(
     // Adaptive thinking mode
     delete body.thinking;
     body.thinking = { type: "adaptive", display: "summarized" };
-    let effort = presetStore.state.adaptiveThinkingEffort ?? "high";
+    let effort =
+      getModelReasoningEffort(aiModel) ??
+      presetStore.state.adaptiveThinkingEffort ??
+      "high";
     if (
       effort === "xhigh" &&
       !arg.modelInfo.flags.includes(LLMFlags.claudeXHighEffort)

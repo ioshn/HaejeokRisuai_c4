@@ -2301,6 +2301,10 @@ export const languageEnglish = {
   additionalParamsMainModel: "Additional Parameters — Main Model",
   additionalParamsSubModel: "Additional Parameters — Auxiliary Model",
   additionalParamsPreset: "Additional Parameters — Prompt Preset",
+  modelReasoningEffortLabel: "Reasoning Effort",
+  modelReasoningEffortDefault: "Default (preset / model default)",
+  modelReasoningEffortDesc:
+    "Persistently saved per model ID regardless of prompt preset changes.",
   modelAdditionalParamsDesc:
     "One per line. Supports `key=value` / `key=json::{...}` / `header::Name=value` / `key={{none}}`. Persistently saved per model ID regardless of preset changes.",
   presetAdditionalParamsDesc:
