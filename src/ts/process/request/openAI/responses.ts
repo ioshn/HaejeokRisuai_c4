@@ -1106,7 +1106,7 @@ function wrapResponsesToolStream(
         });
 
         const transtream = getResponsesTranStream(arg);
-        resRec.body.pipeTo(transtream.writable);
+        void resRec.body.pipeTo(transtream.writable).catch(() => {});
         reader = transtream.readable.getReader();
         lastValue = { "0": "" };
       }
@@ -1189,7 +1189,7 @@ export async function requestOpenAIResponseAPI(
     });
 
     const transtream = getResponsesTranStream(arg);
-    response.body.pipeTo(transtream.writable);
+    void response.body.pipeTo(transtream.writable).catch(() => {});
     return {
       type: "streaming",
       result: wrapResponsesToolStream(

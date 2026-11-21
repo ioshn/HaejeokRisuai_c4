@@ -50,6 +50,8 @@ const CHAT_RUNTIME_KEYS = new Set([
   "messagesFullyLoaded",
   "preventMessageCompaction",
   "detailsLoaded",
+  "isStreaming",
+  "activeStreamingDisplayOptimizationMode",
 ]);
 
 function persistedFieldsFingerprint(

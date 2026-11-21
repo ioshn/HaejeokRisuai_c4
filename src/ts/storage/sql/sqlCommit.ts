@@ -124,6 +124,9 @@ export function sqlChatData(value: Chat): unknown {
     messagesFullyLoaded: _messagesFullyLoaded,
     preventMessageCompaction: _preventMessageCompaction,
     detailsLoaded: _detailsLoaded,
+    isStreaming: _isStreaming,
+    activeStreamingDisplayOptimizationMode:
+      _activeStreamingDisplayOptimizationMode,
     ...data
   } = value;
   return data;
