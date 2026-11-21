@@ -82,6 +82,10 @@ export interface LLMModel {
   keyIdentifier?: string;
   endpoint?: string;
   fromPocketRegistry?: boolean;
+  /** Dot-path in the request body where reasoning effort is sent (e.g. "reasoning.effort", "reasoning_effort", "thinkingConfig.thinkingLevel"). */
+  reasoningEffortPath?: string;
+  /** Supported reasoning effort enum values for this model (e.g. ["low","medium","high","xhigh"]). */
+  reasoningEffortOptions?: string[];
 }
 
 export const ProviderNames = new Map<LLMProvider, string>([

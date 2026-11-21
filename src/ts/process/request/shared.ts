@@ -1,3 +1,4 @@
+import { LLMFlags, LLMFormat, type LLMModel } from "src/ts/model/types";
 import { presetStore } from "src/ts/stores/domain/presetStore.svelte";
 import { settingsStore } from "src/ts/stores/domain/settingsStore.svelte";
 
@@ -62,6 +63,149 @@ function parseAdditionalParamLines(params?: string): [string, string][] {
     }
   }
   return additionalParams;
+}
+
+export interface ModelReasoningEffortMeta {
+  path: string;
+  options: string[];
+}
+
+export function resolveModelReasoningEffortMeta(
+  modelInfo?: LLMModel | null,
+): ModelReasoningEffortMeta | null {
+  if (!modelInfo) return null;
+
+  if (
+    modelInfo.reasoningEffortPath &&
+    modelInfo.reasoningEffortOptions &&
+    modelInfo.reasoningEffortOptions.length > 0
+  ) {
+    const path =
+      modelInfo.format === LLMFormat.OpenAIResponseAPI
+        ? "reasoning.effort"
+        : modelInfo.reasoningEffortPath;
+    return {
+      path,
+      options: modelInfo.reasoningEffortOptions,
+    };
+  }
+
+  const params = modelInfo.parameters ?? [];
+  const flags = modelInfo.flags ?? [];
+
+  if (
+    modelInfo.format === LLMFormat.Anthropic ||
+    modelInfo.format === LLMFormat.AWSBedrockClaude
+  ) {
+    if (flags.includes(LLMFlags.claudeAdaptiveThinking)) {
+      const options = flags.includes(LLMFlags.claudeXHighEffort)
+        ? ["low", "medium", "high", "xhigh", "max"]
+        : ["low", "medium", "high", "max"];
+      return {
+        path: modelInfo.reasoningEffortPath ?? "output_config.effort",
+        options:
+          modelInfo.reasoningEffortOptions &&
+          modelInfo.reasoningEffortOptions.length > 0
+            ? modelInfo.reasoningEffortOptions
+            : options,
+      };
+    }
+    return null;
+  }
+
+  if (flags.includes(LLMFlags.deepSeekThinkingToggle)) {
+    return {
+      path: modelInfo.reasoningEffortPath ?? "thinking.reasoning_effort",
+      options:
+        modelInfo.reasoningEffortOptions &&
+        modelInfo.reasoningEffortOptions.length > 0
+          ? modelInfo.reasoningEffortOptions
+          : ["high", "max"],
+    };
+  }
+
+  const hasReasoningParam =
+    params.includes("reasoning_effort") ||
+    params.includes("reasoning_effort_min_medium") ||
+    params.includes("reasoning_effort_none") ||
+    params.includes("reasoning_effort_xhigh");
+
+  if (
+    modelInfo.format === LLMFormat.GoogleCloud ||
+    modelInfo.format === LLMFormat.VertexAIGemini
+  ) {
+    if (!hasReasoningParam) return null;
+    const options: string[] = [];
+    if (!flags.includes(LLMFlags.geminiThinkingNoMinimal)) {
+      options.push("minimal");
+    }
+    options.push("low", "medium", "high");
+    if (params.includes("reasoning_effort_xhigh")) {
+      options.push("xhigh");
+    }
+    return {
+      path: modelInfo.reasoningEffortPath ?? "thinkingConfig.thinkingLevel",
+      options:
+        modelInfo.reasoningEffortOptions &&
+        modelInfo.reasoningEffortOptions.length > 0
+          ? modelInfo.reasoningEffortOptions
+          : options,
+    };
+  }
+
+  if (hasReasoningParam) {
+    const options: string[] = [];
+    if (params.includes("reasoning_effort_none")) {
+      options.push("none");
+    } else if (!params.includes("reasoning_effort_min_medium")) {
+      options.push("minimal");
+    }
+    if (!params.includes("reasoning_effort_min_medium")) {
+      options.push("low");
+    }
+    options.push("medium", "high");
+    if (params.includes("reasoning_effort_xhigh")) {
+      options.push("xhigh");
+    }
+    const defaultPath =
+      modelInfo.format === LLMFormat.OpenAIResponseAPI
+        ? "reasoning.effort"
+        : "reasoning_effort";
+    return {
+      path: modelInfo.reasoningEffortPath ?? defaultPath,
+      options:
+        modelInfo.reasoningEffortOptions &&
+        modelInfo.reasoningEffortOptions.length > 0
+          ? modelInfo.reasoningEffortOptions
+          : options,
+    };
+  }
+
+  return null;
+}
+
+export function getModelReasoningEffort(aiModel?: string): string | undefined {
+  if (!aiModel) return undefined;
+  const val = settingsStore.state.modelReasoningEffort?.[aiModel]?.trim();
+  return val || undefined;
+}
+
+export function applyModelReasoningEffort<T extends Record<string, any>>(
+  body: T,
+  aiModel: string | undefined,
+  modelInfo: LLMModel | undefined,
+  pathOverride?: string,
+): T {
+  const effort = getModelReasoningEffort(aiModel);
+  if (!effort || !modelInfo) {
+    return body;
+  }
+  const meta = resolveModelReasoningEffortMeta(modelInfo);
+  const path = pathOverride ?? meta?.path;
+  if (!path) {
+    return body;
+  }
+  return setObjectValue(body, path, effort);
 }
 
 // Concatenate shared, preset-bound, and persistent model-dependent parameters.

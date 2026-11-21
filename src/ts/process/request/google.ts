@@ -43,6 +43,7 @@ import {
 import { tryExecuteNodeProviderTransport } from "./nodeProviderExecutor";
 import {
   applyAdditionalParameters,
+  applyModelReasoningEffort,
   applyParameters,
   getAdditionalParameters,
 } from "./shared";
@@ -258,6 +259,16 @@ export async function requestGoogleCloudVertex(
 
   if (systemPrompt === "") {
     delete body.systemInstruction;
+  }
+
+  body.generation_config = applyModelReasoningEffort(
+    body.generation_config,
+    arg.aiModel,
+    arg.modelInfo,
+    "thinkingConfig.thinkingLevel",
+  );
+  if (body.generation_config?.thinkingConfig?.thinkingLevel) {
+    delete body.generation_config.thinkingBudget;
   }
 
   const finalizedGeneration = finalizeGoogleGenerationConfig(

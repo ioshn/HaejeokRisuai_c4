@@ -2202,6 +2202,10 @@ export const languageKorean = {
   additionalParamsMainModel: "추가 파라미터 — 메인 모델",
   additionalParamsSubModel: "추가 파라미터 — 보조 모델",
   additionalParamsPreset: "추가 파라미터 — 프롬프트 프리셋",
+  modelReasoningEffortLabel: "추론 강도 (Reasoning Effort)",
+  modelReasoningEffortDefault: "기본값 (프리셋/모델 기본)",
+  modelReasoningEffortDesc:
+    "이 모델 ID에 영구 저장되며 프롬프트 프리셋을 바꿔도 유지됩니다.",
   modelAdditionalParamsDesc:
     "한 줄에 하나씩. `key=value` / `key=json::{...}` / `header::Name=value` / `key={{none}}` 지원. 해당 모델 ID에 영구 저장되며 프리셋을 바꿔도 유지됩니다.",
   presetAdditionalParamsDesc:
