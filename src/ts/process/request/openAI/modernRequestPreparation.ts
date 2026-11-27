@@ -33,6 +33,7 @@ import {
   applyParameters,
   getAdditionalParameters,
   getModelReasoningEffort,
+  resolveModelReasoningEffortMeta,
 } from "../shared";
 import { getLocalNetworkRequestOptions } from "./shared";
 import type { OpenAIChatExtra } from "./types";
@@ -135,8 +136,11 @@ export async function prepareModernOpenAIRequest(
         : undefined,
   });
 
-  const openAIParamRename = arg.modelInfo.reasoningEffortPath
-    ? { reasoning_effort: arg.modelInfo.reasoningEffortPath }
+  const effectiveReasoningEffortPath = resolveModelReasoningEffortMeta(
+    arg.modelInfo,
+  )?.path;
+  const openAIParamRename = effectiveReasoningEffortPath
+    ? { reasoning_effort: effectiveReasoningEffortPath }
     : {};
   body = applyParameters(
     body,
@@ -151,14 +155,16 @@ export async function prepareModernOpenAIRequest(
   const modelDeepSeekEffort = arg.modelInfo.flags.includes(
     LLMFlags.deepSeekThinkingToggle,
   )
-    ? getModelReasoningEffort(aiModel)
+    ? getModelReasoningEffort(aiModel, arg.modelInfo)
     : undefined;
   const hasTools = Boolean(arg.tools && arg.tools.length > 0);
   const postPolicies = applyOpenAIPostParameterBodyPolicies(body, {
     deepSeekThinkingToggle: arg.modelInfo.flags.includes(
       LLMFlags.deepSeekThinkingToggle,
     ),
-    deepSeekThinkingType: presetStore.state.deepseekThinkingType,
+    deepSeekThinkingType: modelDeepSeekEffort
+      ? "enabled"
+      : presetStore.state.deepseekThinkingType,
     deepSeekReasoningEffort:
       modelDeepSeekEffort ?? presetStore.state.deepseekReasoningEffort,
     toolDefinitions: hasTools
@@ -245,14 +251,14 @@ export async function prepareModernOpenAIRequest(
     headers["HTTP-Referer"] = "https://risuai.xyz";
   }
 
-  if (!arg.modelInfo.flags.includes(LLMFlags.deepSeekThinkingToggle)) {
-    body = applyModelReasoningEffort(body, aiModel, arg.modelInfo);
-  }
   body = applyAdditionalParameters(
     body,
     headers,
-    getAdditionalParameters(aiModel),
+    getAdditionalParameters(aiModel, arg.modelInfo),
   );
+  if (!arg.modelInfo.flags.includes(LLMFlags.deepSeekThinkingToggle)) {
+    body = applyModelReasoningEffort(body, aiModel, arg.modelInfo);
+  }
   if (!arg.useStreaming) body.stream = false;
 
   return {

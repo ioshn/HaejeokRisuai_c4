@@ -287,13 +287,18 @@ function finalizeGoogleGenerationConfig(
   options: any = {},
 ): any {
   if (options.thinking) {
-    if (generationConfig.thinkingBudget !== undefined) {
+    if (
+      generationConfig.thinkingBudget !== undefined &&
+      generationConfig.thinkingBudget !== null
+    ) {
       generationConfig.thinkingConfig = {
+        ...generationConfig.thinkingConfig,
         thinkingBudget: generationConfig.thinkingBudget,
         includeThoughts: true,
       };
       delete generationConfig.thinkingBudget;
     } else if (generationConfig.thinkingConfig) {
+      delete generationConfig.thinkingBudget;
       if (
         generationConfig.thinkingConfig.thinkingLevel === "minimal" &&
         options.thinkingNoMinimal
@@ -301,6 +306,11 @@ function finalizeGoogleGenerationConfig(
         generationConfig.thinkingConfig.thinkingLevel = "low";
       }
       generationConfig.thinkingConfig.includeThoughts = true;
+    } else {
+      delete generationConfig.thinkingBudget;
+      generationConfig.thinkingConfig = {
+        includeThoughts: true,
+      };
     }
   }
 

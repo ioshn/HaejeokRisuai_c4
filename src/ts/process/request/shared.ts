@@ -83,7 +83,11 @@ export function resolveModelReasoningEffortMeta(
     const path =
       modelInfo.format === LLMFormat.OpenAIResponseAPI
         ? "reasoning.effort"
-        : modelInfo.reasoningEffortPath;
+        : modelInfo.keyIdentifier === "vercel" &&
+            modelInfo.format === LLMFormat.OpenAICompatible &&
+            modelInfo.reasoningEffortPath === "reasoning.effort"
+          ? "reasoning_effort"
+          : modelInfo.reasoningEffortPath;
     return {
       path,
       options: modelInfo.reasoningEffortOptions,
@@ -184,10 +188,21 @@ export function resolveModelReasoningEffortMeta(
   return null;
 }
 
-export function getModelReasoningEffort(aiModel?: string): string | undefined {
-  if (!aiModel) return undefined;
-  const val = settingsStore.state.modelReasoningEffort?.[aiModel]?.trim();
-  return val || undefined;
+export function getModelReasoningEffort(
+  aiModel?: string,
+  modelInfo?: LLMModel | null,
+): string | undefined {
+  const map = settingsStore.state.modelReasoningEffort;
+  if (!map) return undefined;
+  if (aiModel) {
+    const direct = map[aiModel]?.trim();
+    if (direct) return direct;
+  }
+  if (modelInfo?.id && modelInfo.id !== aiModel) {
+    const byInfoId = map[modelInfo.id]?.trim();
+    if (byInfoId) return byInfoId;
+  }
+  return undefined;
 }
 
 export function applyModelReasoningEffort<T extends Record<string, any>>(
@@ -196,7 +211,7 @@ export function applyModelReasoningEffort<T extends Record<string, any>>(
   modelInfo: LLMModel | undefined,
   pathOverride?: string,
 ): T {
-  const effort = getModelReasoningEffort(aiModel);
+  const effort = getModelReasoningEffort(aiModel, modelInfo);
   if (!effort || !modelInfo) {
     return body;
   }
@@ -205,21 +220,43 @@ export function applyModelReasoningEffort<T extends Record<string, any>>(
   if (!path) {
     return body;
   }
+  if (path !== "reasoning_effort" && "reasoning_effort" in body) {
+    delete (body as any).reasoning_effort;
+  } else if (
+    path === "reasoning_effort" &&
+    body.reasoning &&
+    typeof body.reasoning === "object" &&
+    "effort" in body.reasoning
+  ) {
+    delete body.reasoning.effort;
+    if (Object.keys(body.reasoning).length === 0) {
+      delete (body as any).reasoning;
+    }
+  }
   return setObjectValue(body, path, effort);
 }
 
 // Concatenate shared, preset-bound, and persistent model-dependent parameters.
-// Per-model parameters come last so they win over preset and shared ones.
-export function getAdditionalParameters(aiModel?: string): [string, string][] {
+// Priority order (lowest -> highest):
+//   1. Shared/global additionalParams
+//   2. Preset additionalParams (prompt preset defaults)
+//   3. Per-model additionalParams (highest among additional parameter sources)
+export function getAdditionalParameters(
+  aiModel?: string,
+  modelInfo?: LLMModel | null,
+): [string, string][] {
   if (!aiModel) {
     return [];
   }
+  const perModelRaw =
+    settingsStore.state.modelAdditionalParams?.[aiModel] ??
+    (modelInfo?.id && modelInfo.id !== aiModel
+      ? settingsStore.state.modelAdditionalParams?.[modelInfo.id]
+      : undefined);
   return [
     ...getSharedAdditionalParameters(aiModel),
     ...parseAdditionalParamLines(presetStore.state.presetAdditionalParams),
-    ...parseAdditionalParamLines(
-      settingsStore.state.modelAdditionalParams?.[aiModel],
-    ),
+    ...parseAdditionalParamLines(perModelRaw),
   ];
 }
 
