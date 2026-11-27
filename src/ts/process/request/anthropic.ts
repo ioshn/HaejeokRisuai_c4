@@ -190,9 +190,15 @@ export async function requestClaude(
   );
 
   // Handle thinking mode: off, adaptive, or budget
+  // Explicit per-model reasoning effort overrides preset thinkingType === "off".
+  const explicitModelEffort = getModelReasoningEffort(aiModel, arg.modelInfo);
   const thinkingType = resolveClaudeThinkingType(
     arg.modelInfo.flags,
-    presetStore.state.thinkingType,
+    explicitModelEffort &&
+      presetStore.state.thinkingType === "off" &&
+      arg.modelInfo.flags.includes(LLMFlags.claudeAdaptiveThinking)
+      ? "adaptive"
+      : presetStore.state.thinkingType,
   );
 
   if (thinkingType === "off") {
@@ -209,7 +215,7 @@ export async function requestClaude(
     delete body.thinking;
     body.thinking = { type: "adaptive", display: "summarized" };
     let effort =
-      getModelReasoningEffort(aiModel) ??
+      explicitModelEffort ??
       presetStore.state.adaptiveThinkingEffort ??
       "high";
     if (
@@ -236,7 +242,7 @@ export async function requestClaude(
   }
 
   const bedrock = arg.modelInfo.format === LLMFormat.AWSBedrockClaude;
-  const additionalParams = getAdditionalParameters(aiModel);
+  const additionalParams = getAdditionalParameters(aiModel, arg.modelInfo);
   const hasCustomAnthropicBeta = additionalParams.some(([key]) => {
     return (
       key.startsWith("header::") &&
@@ -442,6 +448,19 @@ export async function requestClaude(
 
   if (additionalParams.length > 0) {
     body = applyAdditionalParameters(body, headers, additionalParams);
+  }
+  if (
+    explicitModelEffort &&
+    arg.modelInfo.flags.includes(LLMFlags.claudeAdaptiveThinking)
+  ) {
+    let effort = explicitModelEffort;
+    if (
+      effort === "xhigh" &&
+      !arg.modelInfo.flags.includes(LLMFlags.claudeXHighEffort)
+    ) {
+      effort = "high";
+    }
+    body.output_config = { ...(body.output_config ?? {}), effort };
   }
 
   let betas: string[] = [];

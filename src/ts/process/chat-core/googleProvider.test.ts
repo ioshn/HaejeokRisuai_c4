@@ -277,6 +277,20 @@ describe("Google provider core", () => {
       },
       useStreaming: false,
     });
+
+    const defaultThinking = { maxOutputTokens: 512, thinkingBudget: null as any };
+    expect(
+      finalizeGoogleGenerationConfig(defaultThinking, {
+        thinking: true,
+        useStreaming: true,
+      }),
+    ).toEqual({
+      generationConfig: {
+        maxOutputTokens: 512,
+        thinkingConfig: { includeThoughts: true },
+      },
+      useStreaming: true,
+    });
   });
 
   it("leaves ordinary generation settings and streaming untouched", () => {

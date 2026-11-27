@@ -307,6 +307,8 @@ export function normalizeFeatureDatabaseSettings(data: Database): void {
   data.customFlags ??= [];
   data.banCharacterset ??= [];
   data.OaiCompAPIKeys ??= {};
+  data.modelAdditionalParams ??= {};
+  data.modelReasoningEffort ??= {};
   normalizeHypaV3Presets(data);
   normalizeTranslatorPresetState(data);
   migrateAntiClaudeOverload(data);

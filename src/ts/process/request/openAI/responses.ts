@@ -1126,8 +1126,17 @@ export async function requestOpenAIResponseAPI(
   body = applyAdditionalParameters(
     body,
     headers,
-    getAdditionalParameters(aiModel),
+    getAdditionalParameters(aiModel, arg.modelInfo),
   );
+  body = applyModelReasoningEffort(
+    body,
+    aiModel,
+    arg.modelInfo,
+    "reasoning.effort",
+  );
+  if (body.reasoning?.effort) {
+    body.reasoning.summary ??= "auto";
+  }
   if (!arg.useStreaming) {
     body.stream = false;
   }
