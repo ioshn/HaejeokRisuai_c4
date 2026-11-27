@@ -1223,10 +1223,12 @@
 {#snippet messageStateButtons(showNames:boolean)}
     <button class="flex items-center hover:text-blue-500 transition-colors" onclick={async () => {
         await sleep(1)
+        const targetIndex = resolveCurrentMessageIndex()
+        if (targetIndex < 0) return
         const char = characterStore.characters[targetCharacterIndex]
         const currentChat = char?.chats?.[targetChatIndex]
-        if (currentChat?.message?.[idx]) {
-            const currentMessage = currentChat.message[idx]
+        if (currentChat?.message?.[targetIndex]) {
+            const currentMessage = currentChat.message[targetIndex]
             currentMessage.disabled = !currentMessage.disabled
             if (currentChat.id) {
                 void messageStore.updateMessage(currentChat.id, currentMessage)
@@ -1241,10 +1243,12 @@
 
     <button class="flex items-center hover:text-blue-500 transition-colors" onclick={async () => {
         await sleep(1)
+        const targetIndex = resolveCurrentMessageIndex()
+        if (targetIndex < 0) return
         const char = characterStore.characters[targetCharacterIndex]
         const currentChat = char?.chats?.[targetChatIndex]
-        if (currentChat?.message?.[idx]) {
-            const currentMessage = currentChat.message[idx]
+        if (currentChat?.message?.[targetIndex]) {
+            const currentMessage = currentChat.message[targetIndex]
             currentMessage.disabled = currentMessage.disabled === 'allBefore' ? false : 'allBefore'
             if (currentChat.id) {
                 void messageStore.updateMessage(currentChat.id, currentMessage)

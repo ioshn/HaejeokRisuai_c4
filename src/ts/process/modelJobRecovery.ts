@@ -11,6 +11,15 @@ import { getNodeServerProxyAuth } from "../storage/files/nodeStorage";
 import type { Message } from "../storage/database/schema";
 import type { DurableModelJobRecord } from "../../../packages/protocol/modelJobs.ts";
 import { setRemoteChatGeneration } from "./chat/runtimeState";
+import {
+  cancelChatGenerationStats,
+  completeChatGenerationStats,
+  getChatGenerationStats,
+  chatGenerationStats,
+  recordChatGenerationText,
+  startChatGenerationStats,
+} from "./chat/generationStats";
+import { get } from "svelte/store";
 import { extractOpenAIDeltaReasoning } from "@risuai/chat-core/openAIProvider.ts";
 
 export type { DurableModelJobRecord } from "../../../packages/protocol/modelJobs.ts";
@@ -252,11 +261,44 @@ async function locateChat(chatId: string): Promise<LocatedChat | null> {
 
 const remotePreviewGenerationIds = new Set<string>();
 
+function ensureRecoveredGenerationStats(
+  job: DurableModelJobRecord,
+  characterIndex: number,
+  chatIndex: number,
+): void {
+  if (!job.generationId) return;
+  const current = get(chatGenerationStats).get(job.generationId);
+  if (current) return;
+  const existingForChat = getChatGenerationStats(
+    get(chatGenerationStats),
+    characterIndex,
+    chatIndex,
+  );
+  if (existingForChat?.generationId === job.generationId) return;
+  startChatGenerationStats({
+    generationId: job.generationId,
+    selectedChar: characterIndex,
+    selectedChat: chatIndex,
+    model: job.model ?? "",
+    startedAt: job.createdAt || Date.now(),
+  });
+}
+
 function previewRecoveredText(job: DurableModelJobRecord, text: string): void {
   if (!job.generationId || !text.trim()) return;
-  for (const character of characterStore.characters) {
-    const chat = character?.chats?.find((item) => item?.id === job.chatId);
+  for (
+    let characterIndex = 0;
+    characterIndex < characterStore.characters.length;
+    characterIndex++
+  ) {
+    const character = characterStore.characters[characterIndex];
+    const chatIndex =
+      character?.chats?.findIndex((item) => item?.id === job.chatId) ?? -1;
+    if (chatIndex < 0) continue;
+    const chat = character.chats[chatIndex];
     if (!chat || chat.messagesLoaded === false) continue;
+    ensureRecoveredGenerationStats(job, characterIndex, chatIndex);
+    recordChatGenerationText(job.generationId, text);
     chat.message ??= [];
     const existing = chat.message.find(
       (message) =>
@@ -287,6 +329,9 @@ function previewRecoveredText(job: DurableModelJobRecord, text: string): void {
 }
 
 function clearRecoveredPreview(job: DurableModelJobRecord): void {
+  if (job.generationId) {
+    cancelChatGenerationStats(job.generationId);
+  }
   if (!job.generationId || !remotePreviewGenerationIds.delete(job.generationId))
     return;
   for (const character of characterStore.characters) {
@@ -313,6 +358,13 @@ async function slotRecoveredText(
   }
   const character = characterStore.characters[location.characterIndex];
   const chat = character.chats[location.chatIndex];
+  if (get(chatGenerationStats).has(job.generationId)) {
+    completeChatGenerationStats(
+      job.generationId,
+      text,
+      job.endedAt ?? Date.now(),
+    );
+  }
   chat.message ??= [];
   const existingIndex = chat.message.findIndex(
     (message) =>
