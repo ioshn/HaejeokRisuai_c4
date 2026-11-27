@@ -29,7 +29,7 @@ export function createDeferredTokenCalculator<T extends TokenSource>({
   cancelFrame = (handle) => cancelAnimationFrame(handle),
   requestIdle = (callback) => {
     if ("requestIdleCallback" in globalThis) {
-      return globalThis.requestIdleCallback(callback);
+      return globalThis.requestIdleCallback(callback, { timeout: debounceMs });
     }
     return globalThis.setTimeout(callback, 0);
   },
@@ -111,7 +111,25 @@ export function createDeferredTokenCalculator<T extends TokenSource>({
         scheduleInitial();
         return changedKeys;
       }
-      if (!initialStarted) return changedKeys;
+      if (!initialStarted) {
+        if (timerHandle === undefined) {
+          timerHandle = setTimer(() => {
+            timerHandle = undefined;
+            if (!initialStarted) {
+              if (frameHandle !== undefined) {
+                cancelFrame(frameHandle);
+                frameHandle = undefined;
+              }
+              if (idleHandle !== undefined) {
+                cancelIdle(idleHandle);
+                idleHandle = undefined;
+              }
+              void run();
+            }
+          }, debounceMs);
+        }
+        return changedKeys;
+      }
 
       if (timerHandle !== undefined) clearTimer(timerHandle);
       timerHandle = setTimer(() => {

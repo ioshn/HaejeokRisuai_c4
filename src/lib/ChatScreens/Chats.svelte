@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { character, groupChat, Message, StreamingDisplayOptimizationMode } from '../../ts/storage/database/schema';
-    import { mount, onDestroy, unmount } from 'svelte';
+    import { mount, onDestroy, unmount, untrack } from 'svelte';
     import Chat from './Chat.svelte';
     import { getCharImage } from 'src/ts/characters';
     import { createSimpleCharacter, selectedCharID, ReloadChatPointer, ReloadGUIPointer } from 'src/ts/stores.svelte';
@@ -82,9 +82,15 @@
         signature: RenderSignature
         instance: ChatInstance
         element: HTMLDivElement
-        messageState: { value: Message }
+        messageState: { value: Message; totalLength: number }
     }
     const renderEntries = new Map<string, RenderEntry>();
+
+    const unmountChatInstance = (instance: ChatInstance) => {
+        untrack(() => {
+            try { unmount(instance); } catch (e) {}
+        });
+    };
 
     const messageRenderKey = (message: Message, index: number) =>
         message.chatId ? `message:${message.chatId}` : `index:${index}`;
@@ -109,7 +115,7 @@
 
     const clearChatBody = () => {
         renderEntries.forEach(({ instance }) => {
-            try { unmount(instance); } catch (e) {}
+            unmountChatInstance(instance);
         });
         renderEntries.clear();
         if (chatBody) {
@@ -147,11 +153,13 @@
             loadEnd = Math.max(0, chatFoldedStateMessageIndex.index - (loadPages ?? messages.length))
         }
 
+        const totalMessages = messages.length;
         const reloadPointerMap = get(ReloadChatPointer);
 
         for(let i=loadStart ; i >= loadEnd; i--){
             if(i < 0) break;
             const message = messages[i];
+            const messageData = message.data;
             const scriptIdx = getAbsoluteChatMessageIndex(i, currentChat?.messageOffset);
             const key = messageRenderKey(message, i);
             currentKeys.add(key);
@@ -161,7 +169,7 @@
             const rerollIcon = message.role === 'char' || message.role === 'user';
             const signature: RenderSignature = {
                 // Image tokens change on completion/reroll without changing narrative text.
-                data: activeStreamingMessage ? '' : illustrationDisplayLayout(message.data, message.illustrations).display,
+                data: activeStreamingMessage ? '' : illustrationDisplayLayout(messageData, message.illustrations).display,
                 idx: i,
                 scriptIdx,
                 role: message.role,
@@ -181,13 +189,12 @@
             let entry = renderEntries.get(key);
             const needsMount = !entry || !sameRenderSignature(entry.signature, signature);
             if(needsMount){
-                let element: HTMLDivElement;
+                const element = document.createElement('div');
+                element.classList.add('chat-message-container');
                 if(entry){
-                    try { unmount(entry.instance); } catch (e) {}
-                    element = entry.element;
+                    unmountChatInstance(entry.instance);
+                    entry.element.replaceWith(element);
                 } else {
-                    element = document.createElement('div');
-                    element.classList.add('chat-message-container');
                     const nextElement = nextKey ? renderEntries.get(nextKey)?.element : null;
                     if(nextElement){
                         chatBody.insertBefore(element, nextElement.nextSibling);
@@ -195,16 +202,16 @@
                         chatBody.prepend(element);
                     }
                 }
-                let messageState = $state({ value: message });
-                const instance = mount(Chat, {
+                let messageState = $state({ value: message, totalLength: totalMessages });
+                const instance = untrack(() => mount(Chat, {
                     target: element,
                     props: {
                         get message() { return messageState.value.data; },
                         get sourceMessage() { return messageState.value; },
+                        get totalLength() { return messageState.totalLength; },
                         isLastMemory: false,
                         idx: i,
                         scriptIdx,
-                        totalLength: messages.length,
                         img: message.role === 'user' ? userImage : charImage,
                         onReroll: onReroll,
                         unReroll: unReroll,
@@ -220,30 +227,33 @@
                         disabled: message.disabled ?? false,
                         isOptimizedStreamingMessage: activeStreamingMessage,
                         streamingOptimizationMode: performanceMode,
-                        rawStreamingText: message.data,
+                        rawStreamingText: messageData,
                         hideButtons: hideButtons,
                         targetCharacterIndex,
                         targetChatIndex,
                     },
-                })
+                }))
                 entry = { signature, instance, element, messageState };
                 renderEntries.set(key, entry);
             } else {
                 // Preserve Chat/ChatBody while SQL hydration replaces the resident message.
                 entry.messageState.value = message;
+                entry.messageState.totalLength = totalMessages;
                 // Finished messages must not receive streaming-state writes on every hydration.
-                if (activeStreamingMessage) entry.instance.updateStreamingDisplay?.({
-                    isOptimizedStreamingMessage: activeStreamingMessage,
-                    streamingOptimizationMode: performanceMode,
-                    rawStreamingText: message.data,
-                })
+                if (activeStreamingMessage) {
+                    untrack(() => entry!.instance.updateStreamingDisplay?.({
+                        isOptimizedStreamingMessage: activeStreamingMessage,
+                        streamingOptimizationMode: performanceMode,
+                        rawStreamingText: messageData,
+                    }));
+                }
             }
             nextKey = key;
         }
 
         for (const [key, entry] of renderEntries) {
             if (currentKeys.has(key)) continue;
-            try { unmount(entry.instance); } catch (e) {}
+            unmountChatInstance(entry.instance);
             entry.element.remove();
             renderEntries.delete(key);
         }
