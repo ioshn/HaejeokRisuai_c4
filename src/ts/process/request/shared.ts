@@ -83,11 +83,7 @@ export function resolveModelReasoningEffortMeta(
     const path =
       modelInfo.format === LLMFormat.OpenAIResponseAPI
         ? "reasoning.effort"
-        : modelInfo.keyIdentifier === "vercel" &&
-            modelInfo.format === LLMFormat.OpenAICompatible &&
-            modelInfo.reasoningEffortPath === "reasoning.effort"
-          ? "reasoning_effort"
-          : modelInfo.reasoningEffortPath;
+        : modelInfo.reasoningEffortPath;
     return {
       path,
       options: modelInfo.reasoningEffortOptions,
